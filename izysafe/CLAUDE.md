@@ -6,6 +6,20 @@
 
 ---
 
+## 0. Current State (update each sprint; keep terse)
+
+- **Done & on `main`:** Sprint 0 (infra, 33-table schema, partitioning) + Sprint 1 (Auth, User, Children, Family — 29 endpoints, 88 tests). PR #1 merged.
+- **In progress:** Sprint 2 (branch `sprint-2-location`) — real-time location pipeline. Slice 1 DONE: `POST /api/v1/webhook/traccar` hot path (secret-header auth → device resolve w/ Redis cache → validate → Redis latest cache + online TTL + `batch:locations` buffer). 12 tests. Remaining slices: 2 batch writer (lifespan) · 3 Firebase RT DB · 4 device online/offline · 5 battery · 6 speed · 7 GET latest + geofence stub.
+- **Run:** `cd izysafe && docker compose up -d` (postgres, redis@6380→6379, traccar, backend@8000). Tests: `docker compose run --rm backend pytest -q`.
+- **Auth runtime invariants:** JWT HS256 + Redis denylist (`denylist:{access,refresh}:{jti}`) + refresh rotation. `get_current_user` is **fail-open** on Redis down; refresh/logout **fail-closed**. Webhooks/device endpoints are NOT JWT (secret-key / device token).
+- **Authorization invariant:** all child access flows through `family_members` (no owner FK). Non-members get **404** (not 403). Primary parent is protected (can't be removed/demoted). Tier limits counted over the **primary parent**, incl. pending invites.
+- **Validation pattern:** structural/enum → Pydantic (422 `VALIDATION_ERROR`); semantic/business → service raises `APIException` with a precise code (e.g. `INVALID_PHONE`, `CHILD_LIMIT_REACHED`).
+- **Test isolation:** module-level async engine uses **NullPool** (function-scoped loops); per-test session bound to one connection with `join_transaction_mode="create_savepoint"` + outer rollback; fakeredis + fake gateways via `dependency_overrides`.
+- **Deferred (by design):** "guardian accepted" FCM → Sprint 2 (TODO in `invite_service`); 30-day soft-delete purge job → Sprint 6 (Celery).
+- **Gotchas:** Alembic runs **sync** (psycopg2) via `settings.sync_database_url`; app is async (asyncpg). `zoneinfo` needs the `tzdata` dep (slim image). Traccar XML comments must not contain `--`. Image rebuild only needed when deps change; app/test code is volume-mounted.
+
+---
+
 ## 1. Project Context
 
 **What:** GPS child-safety platform for **India + UAE**. Sold standalone and bundled with
@@ -88,7 +102,7 @@ Pick the mechanism by job type — do not mix arbitrarily:
 ### Flow A — Live location (target < 1 second)
 ```
 Watch → GT06 packet → Traccar (:5023)
-  → POST /api/v1/webhook/traccar  (HMAC-validated)
+  → POST /api/v1/webhook/traccar  (static X-Traccar-Secret header, constant-time compare)
     → location_service.process_update():
         validate (lat/lng bounds, ts fresh ≤5min, accuracy)
         Redis SETEX  location:child:{id}:latest      TTL 24h   (instant)
@@ -158,7 +172,7 @@ Watch SOS button held 3s → GT06 alarm → Traccar
 - OTP via WhatsApp (primary) → SMS fallback after 30s. 6 digits, bcrypt hash, 10-min expiry, ≤3 attempts.
 - JWT **HS256**; access 24h, refresh 30d. Refresh rotates access tokens transparently in the Dio interceptor.
 - Phone formats: India `+91` + 10 digits (starts 6–9); UAE `+971` + 9 digits (starts 5).
-- Webhooks (`/webhook/traccar`, `/webhook/traccar/alarm`) authenticated by **secret key / HMAC**, never JWT.
+- Webhooks (`/webhook/traccar`, `/webhook/traccar/alarm`) authenticated by a **static shared-secret header** (`X-Traccar-Secret`, constant-time compared), never JWT. NB: stock Traccar's JSON forwarder can only send a fixed header — it cannot HMAC-sign the body — so auth = secret header + network trust (backend not publicly reachable).
 - Internal device endpoints (`/location/update`, `/sos/trigger`) use a **device token**, not JWT.
 - School admins authenticate by **email + password** (bcrypt), separate from parent OTP.
 

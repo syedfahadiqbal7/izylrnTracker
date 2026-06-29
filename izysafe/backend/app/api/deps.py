@@ -6,17 +6,19 @@ get_current_user is the thin wrapper most endpoints use.
 """
 from __future__ import annotations
 
+import hmac
 import uuid
 from dataclasses import dataclass
 
 import jwt
-from fastapi import Depends
+from fastapi import Depends, Header
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.errors import APIException
 from app.core.redis import get_redis
@@ -35,6 +37,20 @@ def get_otp_gateway() -> OtpGateway:
 
 def get_invite_gateway() -> InviteGateway:
     return InviteGateway()
+
+
+async def verify_traccar_secret(
+    x_traccar_secret: str | None = Header(default=None, alias="X-Traccar-Secret"),
+) -> None:
+    """Authenticate Traccar webhooks via the shared static secret header.
+
+    Traccar's JSON forwarder can only send a fixed header (it cannot HMAC-sign the
+    body), so we constant-time compare the secret and rely on network trust — the
+    backend is not publicly reachable, only Traccar can hit it (CLAUDE.md §7).
+    """
+    expected = settings.traccar_webhook_secret
+    if not x_traccar_secret or not hmac.compare_digest(x_traccar_secret, expected):
+        raise APIException(401, "WEBHOOK_UNAUTHORIZED", "Invalid webhook secret")
 
 
 @dataclass
