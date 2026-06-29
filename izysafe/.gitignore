@@ -1,0 +1,40 @@
+# ---- Runtime data (docker volumes) ----
+data/
+
+# ---- Secrets ----
+.env
+*.env
+!.env.example
+firebase-service-account.json
+firebase-service-account*.json
+traccar/traccar-local.xml
+
+# ---- Python / backend ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ---- Node / web-admin ----
+node_modules/
+dist/
+.vite/
+
+# ---- Flutter ----
+flutter/.dart_tool/
+flutter/build/
+flutter/.flutter-plugins
+flutter/.flutter-plugins-dependencies
+*.iml
+
+# ---- IDE / OS ----
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,32 @@
+# Root safety net (izysafe/.gitignore covers the monorepo subtree in detail)
+
+# Runtime data / volumes
+**/data/
+
+# Secrets
+**/.env
+*.env
+!**/.env.example
+**/firebase-service-account*.json
+**/secrets/*
+!**/secrets/.gitkeep
+
+# Python
+**/__pycache__/
+*.py[cod]
+**/.venv/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+
+# Node / Flutter build artifacts
+**/node_modules/
+**/dist/
+**/build/
+**/.dart_tool/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

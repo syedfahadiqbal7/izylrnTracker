@@ -1,0 +1,138 @@
+# ============================================================================
+# IzySafe — Dev stack (Docker Compose)
+# Bring up infra now:        docker compose up -d postgres redis traccar
+# Bring up everything:       docker compose up -d        (after Step 5 builds backend)
+# Tear down (keep data):     docker compose down
+# Tear down (wipe data):     docker compose down -v   &&   rm -rf ./data
+# ============================================================================
+
+services:
+
+  # --------------------------------------------------------------------------
+  # PostgreSQL 16 — shared by the app (`izysafe` DB) and Traccar (`traccar` DB)
+  # --------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: izysafe-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-izysafe}
+      POSTGRES_USER: ${POSTGRES_USER:-izysafe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_dev_password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      # initdb scripts run ONCE on first init (empty volume): creates `traccar` DB
+      - ./backend/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-izysafe} -d ${POSTGRES_DB:-izysafe}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [izysafe]
+
+  # --------------------------------------------------------------------------
+  # Redis 7 — live cache, geofence state, rate limits, online TTL
+  # Persistence OFF for max speed (cache is reconstructable from Postgres).
+  # --------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: izysafe-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      # Host 6380 → container 6379 (host 6379 is often taken by other stacks).
+      # In-cluster services still reach Redis at redis:6379 over the compose network.
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [izysafe]
+
+  # --------------------------------------------------------------------------
+  # Traccar — GPS middleware. Uses the shared PostgreSQL `traccar` DB (NOT H2).
+  # Forwards positions → /webhook/traccar and events → /webhook/traccar/alarm.
+  # --------------------------------------------------------------------------
+  traccar:
+    image: traccar/traccar:latest
+    container_name: izysafe-traccar
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8082:8082"   # web UI + REST API
+      - "5023:5023"   # GT06   (primary)
+      - "5002:5002"   # TK103
+      - "5013:5013"   # H02
+    volumes:
+      - ./traccar/traccar.xml:/opt/traccar/conf/traccar.xml:ro
+      - ./data/traccar/logs:/opt/traccar/logs
+    networks: [izysafe]
+
+  # --------------------------------------------------------------------------
+  # Backend — FastAPI. Build context + app code arrive in Step 5.
+  # Until then, start only infra:  docker compose up -d postgres redis traccar
+  # --------------------------------------------------------------------------
+  backend:
+    build: ./backend
+    container_name: izysafe-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./backend/secrets:/app/secrets:ro   # firebase-service-account.json lives here (gitignored)
+    # Migrations are run manually in Step 6 (alembic upgrade head); see commands.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks: [izysafe]
+
+  # ==========================================================================
+  # FUTURE SERVICES (uncomment when the sprint that needs them arrives)
+  # ==========================================================================
+
+  # --- Celery worker + beat (Sprint 6) — broker is the existing Redis ---
+  # celery-worker:
+  #   build: ./backend
+  #   container_name: izysafe-celery-worker
+  #   command: celery -A app.workers.celery_app worker --loglevel=info
+  #   env_file: .env
+  #   depends_on: [redis, postgres]
+  #   volumes: ["./backend:/app", "./backend/secrets:/app/secrets:ro"]
+  #   networks: [izysafe]
+  #
+  # celery-beat:
+  #   build: ./backend
+  #   container_name: izysafe-celery-beat
+  #   command: celery -A app.workers.celery_app beat --loglevel=info
+  #   env_file: .env
+  #   depends_on: [redis, postgres]
+  #   volumes: ["./backend:/app", "./backend/secrets:/app/secrets:ro"]
+  #   networks: [izysafe]
+
+  # --- Adminer (optional DB UI) ---
+  # adminer:
+  #   image: adminer:latest
+  #   container_name: izysafe-adminer
+  #   ports: ["8081:8080"]
+  #   depends_on: [postgres]
+  #   networks: [izysafe]
+
+networks:
+  izysafe:
+    driver: bridge

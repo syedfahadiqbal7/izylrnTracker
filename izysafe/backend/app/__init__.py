@@ -1,0 +1,1 @@
+"""IzySafe backend application package."""
