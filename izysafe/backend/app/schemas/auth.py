@@ -6,7 +6,9 @@ through the standard envelope, rather than Pydantic's 422 shape.
 """
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+import uuid
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 # ---- /auth/send-otp ----
@@ -33,6 +35,23 @@ class TokenResponse(BaseModel):
     is_new_user: bool = False
 
 
-# ---- /auth/refresh (next slice) ----
+# ---- /auth/refresh ----
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+# ---- /auth/logout ----
+class LogoutRequest(BaseModel):
+    refresh_token: str
+
+
+# ---- /auth/me ----
+class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    phone: str
+    name: str | None = None
+    country_code: str
+    language: str
+    subscription_tier: str

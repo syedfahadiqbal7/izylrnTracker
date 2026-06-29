@@ -195,6 +195,8 @@ speed_alerted:{child_id}                  "1"                             10min
 sound_sessions:{child_id}                 count                           until midnight
 rate:otp:{phone}                          count                           1h
 rate:otp:ip:{ip}                          count                           1h
+denylist:access:{jti}                     "1"                             access token remaining life (≤24h)
+denylist:refresh:{jti}                    "1"                             refresh token remaining life (≤30d)
 batch:locations                           list<json>                      flush 5s
 izylrn_status:{child_id}                  {studying,subject,started}       4h
 ```
