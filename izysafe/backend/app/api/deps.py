@@ -22,6 +22,7 @@ from app.core.errors import APIException
 from app.core.redis import get_redis
 from app.core.security import decode_token
 from app.models.user import User
+from app.services.invite_gateway import InviteGateway
 from app.services.otp_gateway import OtpGateway
 from app.services.token_service import is_denylisted
 
@@ -30,6 +31,10 @@ _bearer = HTTPBearer(auto_error=False)
 
 def get_otp_gateway() -> OtpGateway:
     return OtpGateway()
+
+
+def get_invite_gateway() -> InviteGateway:
+    return InviteGateway()
 
 
 @dataclass

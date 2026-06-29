@@ -20,6 +20,15 @@ from app.models.device import Device
 # None = unlimited. Premium + School are uncapped here (School is custom/contractual).
 CHILD_LIMITS: dict[str, int | None] = {"free": 1, "basic": 3, "premium": None, "school": None}
 
+
+def effective_tier(user) -> str:
+    """A paid tier whose subscription has expired is treated as 'free'."""
+    tier = user.subscription_tier
+    if tier != "free" and user.subscription_expires_at:
+        if user.subscription_expires_at < datetime.now(timezone.utc):
+            return "free"
+    return tier
+
 _UPGRADE_MSG = {
     "free": "Upgrade to Basic plan to add more children",
     "basic": "Upgrade to Premium plan for unlimited children",
@@ -93,15 +102,8 @@ class ChildrenService:
         await self.db.commit()
 
     # ---------------------------------------------------------------- helpers
-    def _effective_tier(self, user) -> str:
-        tier = user.subscription_tier
-        if tier != "free" and user.subscription_expires_at:
-            if user.subscription_expires_at < datetime.now(timezone.utc):
-                return "free"
-        return tier
-
     async def _enforce_tier_limit(self, user) -> None:
-        tier = self._effective_tier(user)
+        tier = effective_tier(user)
         limit = CHILD_LIMITS.get(tier)
         if limit is None:
             return

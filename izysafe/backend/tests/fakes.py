@@ -21,3 +21,15 @@ class FakeGateway:
         self.sms_calls.append((phone, otp))
         self.last_otp = otp
         return self.sms_ok
+
+
+class FakeInviteGateway:
+    """Stand-in for InviteGateway: configurable channel + call recording."""
+
+    def __init__(self, channel: str | None = "whatsapp") -> None:
+        self.channel = channel          # set to None to simulate a delivery failure
+        self.calls: list[tuple[str, str]] = []
+
+    async def send_invite(self, phone: str, message: str) -> str | None:
+        self.calls.append((phone, message))
+        return self.channel

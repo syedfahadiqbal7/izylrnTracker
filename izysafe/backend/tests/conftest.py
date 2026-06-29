@@ -17,14 +17,14 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.api.deps import get_otp_gateway
+from app.api.deps import get_invite_gateway, get_otp_gateway
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.redis import get_redis
 from app.core.security import create_access_token
 from app.main import app
 from app.models.user import User
-from tests.fakes import FakeGateway
+from tests.fakes import FakeGateway, FakeInviteGateway
 
 # NullPool: never reuse an asyncpg connection across pytest-asyncio's
 # function-scoped event loops (each test gets a fresh connection on its own loop).
@@ -65,14 +65,20 @@ def fake_gateway() -> FakeGateway:
     return FakeGateway()
 
 
+@pytest.fixture
+def fake_invite_gateway() -> FakeInviteGateway:
+    return FakeInviteGateway()
+
+
 @pytest_asyncio.fixture
-async def client(db_session, redis_client, fake_gateway):
+async def client(db_session, redis_client, fake_gateway, fake_invite_gateway):
     async def _override_db():
         yield db_session
 
     app.dependency_overrides[get_db] = _override_db
     app.dependency_overrides[get_redis] = lambda: redis_client
     app.dependency_overrides[get_otp_gateway] = lambda: fake_gateway
+    app.dependency_overrides[get_invite_gateway] = lambda: fake_invite_gateway
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:

@@ -76,6 +76,8 @@ class Settings(BaseSettings):
     # ---- App ----
     backend_url: str = "http://localhost:8000"
     allowed_origins: str = "http://localhost:3000,http://localhost:5173"
+    invite_base_url: str = "https://izysafe.app/invite"   # guardian invite deep link base
+    invite_expiry_hours: int = 48
 
     # ------------------------------------------------------------------ helpers
     @property
