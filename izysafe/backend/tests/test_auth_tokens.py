@@ -6,22 +6,11 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
-import pytest_asyncio
-from sqlalchemy import select
 
 from app.core.config import settings
 from app.core.security import create_access_token, create_refresh_token, decode_token
-from app.models.user import User
 
 PHONE = "+919876543210"
-
-
-@pytest_asyncio.fixture
-async def user(db_session) -> User:
-    u = User(phone=PHONE, country_code="+91")
-    db_session.add(u)
-    await db_session.flush()
-    return u
 
 
 def _auth_header(token: str) -> dict[str, str]:

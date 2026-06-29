@@ -7,6 +7,8 @@ through the standard envelope, rather than Pydantic's 422 shape.
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, time
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -52,6 +54,28 @@ class UserResponse(BaseModel):
     id: uuid.UUID
     phone: str
     name: str | None = None
+    email: str | None = None
+    photo_url: str | None = None
     country_code: str
     language: str
+    timezone: str
     subscription_tier: str
+    subscription_expires_at: datetime | None = None
+    quiet_hours_from: time | None = None
+    quiet_hours_to: time | None = None
+
+
+# ---- PUT /auth/me (partial profile update) ----
+class ProfileUpdateRequest(BaseModel):
+    name: str | None = Field(None, min_length=2, max_length=100)
+    email: str | None = None
+    photo_url: str | None = None
+    language: Literal["en", "hi", "ar"] | None = None
+    timezone: str | None = Field(None, max_length=64)
+    quiet_hours_from: time | None = None
+    quiet_hours_to: time | None = None
+
+
+# ---- PUT /auth/me/fcm-token ----
+class FcmTokenRequest(BaseModel):
+    fcm_token: str = Field(..., min_length=1, max_length=4096)

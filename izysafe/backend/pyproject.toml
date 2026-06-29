@@ -23,6 +23,7 @@ dependencies = [
     "httpx>=0.27",             # OTP gateway calls (MSG91/Twilio), Traccar client
     "pyjwt>=2.8",              # JWT HS256
     "bcrypt>=4.1",             # OTP + password hashing
+    "tzdata>=2024.1",          # IANA tz database for zoneinfo (slim image lacks it)
 ]
 
 [project.optional-dependencies]

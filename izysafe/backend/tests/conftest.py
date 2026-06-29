@@ -21,7 +21,9 @@ from app.api.deps import get_otp_gateway
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.redis import get_redis
+from app.core.security import create_access_token
 from app.main import app
+from app.models.user import User
 from tests.fakes import FakeGateway
 
 # NullPool: never reuse an asyncpg connection across pytest-asyncio's
@@ -77,3 +79,18 @@ async def client(db_session, redis_client, fake_gateway):
         yield c
 
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def user(db_session) -> User:
+    """A persisted parent user (shared across auth/profile tests)."""
+    u = User(phone="+919876543210", country_code="+91", name="Test Parent")
+    db_session.add(u)
+    await db_session.flush()
+    return u
+
+
+@pytest.fixture
+def auth_headers(user) -> dict[str, str]:
+    """Authorization header carrying a valid access token for `user`."""
+    return {"Authorization": f"Bearer {create_access_token(str(user.id))}"}

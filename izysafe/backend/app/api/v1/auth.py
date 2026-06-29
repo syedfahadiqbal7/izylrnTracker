@@ -17,7 +17,9 @@ from app.core.redis import get_redis
 from app.core.security import create_access_token, create_refresh_token, decode_token
 from app.models.user import User
 from app.schemas.auth import (
+    FcmTokenRequest,
     LogoutRequest,
+    ProfileUpdateRequest,
     RefreshRequest,
     SendOtpRequest,
     UserResponse,
@@ -26,6 +28,7 @@ from app.schemas.auth import (
 from app.services.otp_gateway import OtpGateway
 from app.services.otp_service import OtpService
 from app.services.token_service import denylist, is_denylisted
+from app.services.user_service import UserService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -145,3 +148,27 @@ async def logout(
 async def me(current_user: User = Depends(get_current_user)) -> dict:
     """Return the authenticated user's profile."""
     return success(UserResponse.model_validate(current_user).model_dump(mode="json"))
+
+
+@router.put("/me")
+async def update_me(
+    payload: ProfileUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Partial profile update (name, email, photo, language, timezone, quiet hours)."""
+    user = await UserService(db).update_profile(
+        current_user, payload.model_dump(exclude_unset=True)
+    )
+    return success(UserResponse.model_validate(user).model_dump(mode="json"))
+
+
+@router.put("/me/fcm-token")
+async def set_fcm_token(
+    payload: FcmTokenRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Register/refresh the device FCM token for push notifications."""
+    await UserService(db).set_fcm_token(current_user, payload.fcm_token)
+    return success({"success": True})
