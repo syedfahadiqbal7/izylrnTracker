@@ -37,6 +37,8 @@ class ProcessResult:
     stale: bool = False
     device_id: uuid.UUID | None = None
     child_id: uuid.UUID | None = None
+    # The child "latest" payload, reused for the off-hot-path Firebase live write.
+    live_payload: dict | None = None
 
 
 def _coords_valid(lat: float, lng: float) -> bool:
@@ -69,12 +71,13 @@ class LocationService:
         ts = pos.best_time or datetime.now(timezone.utc)
         stale = (datetime.now(timezone.utc) - ts).total_seconds() > STALE_AFTER_SECONDS
 
-        await self._write_cache(device_id, child_id, pos, ts)
+        live_payload = await self._write_cache(device_id, child_id, pos, ts)
         await self.redis.set(rk.device_online(device_id), "1", ex=rk.ONLINE_TTL)
         await self._enqueue_batch(device_id, child_id, pos, ts)
 
         return ProcessResult(
-            stored=True, stale=stale, device_id=device_id, child_id=child_id
+            stored=True, stale=stale, device_id=device_id, child_id=child_id,
+            live_payload=live_payload,
         )
 
     # --------------------------------------------------------------- internals
@@ -118,37 +121,36 @@ class LocationService:
         child_id: uuid.UUID,
         pos: TraccarPositionIn,
         ts: datetime,
-    ) -> None:
+    ) -> dict:
+        """Write the child + device latest caches. Returns the child payload, which
+        is reused verbatim for the Firebase live-map write (kept consistent)."""
         speed_kmh = round(pos.speed * KNOTS_TO_KMH, 1) if pos.speed is not None else None
         ts_iso = ts.isoformat()
 
-        child_payload = json.dumps(
-            {
-                "lat": pos.latitude,
-                "lng": pos.longitude,
-                "device_id": str(device_id),
-                "battery": pos.battery_pct,
-                "speed": speed_kmh,
-                "accuracy": pos.accuracy,
-                "bearing": pos.course,
-                "is_moving": pos.attributes.motion,
-                "ts": ts_iso,
-            }
-        )
-        device_payload = json.dumps(
-            {
-                "lat": pos.latitude,
-                "lng": pos.longitude,
-                "battery": pos.battery_pct,
-                "ts": ts_iso,
-            }
+        child_payload = {
+            "lat": pos.latitude,
+            "lng": pos.longitude,
+            "device_id": str(device_id),
+            "battery": pos.battery_pct,
+            "speed": speed_kmh,
+            "accuracy": pos.accuracy,
+            "bearing": pos.course,
+            "is_moving": pos.attributes.motion,
+            "ts": ts_iso,
+        }
+        device_payload = {
+            "lat": pos.latitude,
+            "lng": pos.longitude,
+            "battery": pos.battery_pct,
+            "ts": ts_iso,
+        }
+        await self.redis.set(
+            rk.loc_child_latest(child_id), json.dumps(child_payload), ex=rk.LOCATION_CACHE_TTL
         )
         await self.redis.set(
-            rk.loc_child_latest(child_id), child_payload, ex=rk.LOCATION_CACHE_TTL
+            rk.loc_device_latest(device_id), json.dumps(device_payload), ex=rk.LOCATION_CACHE_TTL
         )
-        await self.redis.set(
-            rk.loc_device_latest(device_id), device_payload, ex=rk.LOCATION_CACHE_TTL
-        )
+        return child_payload
 
     async def _enqueue_batch(
         self,

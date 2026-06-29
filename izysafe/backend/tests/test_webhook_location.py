@@ -195,3 +195,36 @@ async def test_missing_battery_is_none(client, db_session, redis_client):
     await client.post(URL, headers=SECRET_HEADERS, json=payload)
     cached = json.loads(await redis_client.get(rk.loc_child_latest(child.id)))
     assert cached["battery"] is None
+
+
+# --------------------------------------------------------------------------- #
+# Firebase live-location write (off the hot path, via BackgroundTask)
+# --------------------------------------------------------------------------- #
+async def test_live_location_written_on_accept(client, db_session, fake_realtime_gateway):
+    child, device = await _make_device(db_session)
+    await client.post(URL, headers=SECRET_HEADERS, json=_payload(battery=80, speed=10.0))
+
+    assert len(fake_realtime_gateway.calls) == 1
+    child_id, payload = fake_realtime_gateway.calls[0]
+    assert child_id == str(child.id)
+    assert payload["lat"] == 25.2048 and payload["lng"] == 55.2708
+    assert payload["battery"] == 80
+    assert payload["device_id"] == str(device.id)
+    assert payload["speed"] == pytest.approx(18.5, abs=0.05)
+
+
+async def test_live_location_payload_matches_cache(client, db_session, redis_client, fake_realtime_gateway):
+    child, _ = await _make_device(db_session)
+    await client.post(URL, headers=SECRET_HEADERS, json=_payload())
+    cached = json.loads(await redis_client.get(rk.loc_child_latest(child.id)))
+    _, live = fake_realtime_gateway.calls[0]
+    assert live == cached  # Firebase live write is the same payload as the child cache
+
+
+@pytest.mark.parametrize(
+    "kwargs", [{"traccar_id": 8888, "imei": "x"}, {"lat": 0.0, "lng": 0.0}, {"valid": False}]
+)
+async def test_no_live_write_when_ignored(client, db_session, fake_realtime_gateway, kwargs):
+    await _make_device(db_session)
+    await client.post(URL, headers=SECRET_HEADERS, json=_payload(**kwargs))
+    assert fake_realtime_gateway.calls == []

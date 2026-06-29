@@ -26,6 +26,7 @@ from app.core.security import decode_token
 from app.models.user import User
 from app.services.invite_gateway import InviteGateway
 from app.services.otp_gateway import OtpGateway
+from app.services.realtime_gateway import RealtimeGateway
 from app.services.token_service import is_denylisted
 
 _bearer = HTTPBearer(auto_error=False)
@@ -37,6 +38,10 @@ def get_otp_gateway() -> OtpGateway:
 
 def get_invite_gateway() -> InviteGateway:
     return InviteGateway()
+
+
+def get_realtime_gateway() -> RealtimeGateway:
+    return RealtimeGateway()
 
 
 async def verify_traccar_secret(
