@@ -20,13 +20,17 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "redis>=5.0",
+    "httpx>=0.27",             # OTP gateway calls (MSG91/Twilio), Traccar client
+    "pyjwt>=2.8",              # JWT HS256
+    "bcrypt>=4.1",             # OTP + password hashing
+    "tzdata>=2024.1",          # IANA tz database for zoneinfo (slim image lacks it)
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.2",
     "pytest-asyncio>=0.23",
-    "httpx>=0.27",             # FastAPI TestClient / async test client
+    "fakeredis>=2.21",         # in-memory Redis for tests
     "ruff>=0.5",
 ]
 
@@ -37,6 +41,7 @@ include = ["app*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+pythonpath = ["."]
 
 [tool.ruff]
 line-length = 100

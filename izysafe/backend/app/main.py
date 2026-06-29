@@ -12,7 +12,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.errors import register_exception_handlers
 from app.core.firebase import init_firebase
 from app.core.redis import close_redis
 
@@ -46,6 +48,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+register_exception_handlers(app)
+
 
 @app.get("/health", tags=["meta"])
 async def health() -> dict[str, str]:
@@ -59,6 +63,5 @@ async def root() -> dict[str, str]:
     return {"service": "izysafe-api", "version": "0.1.0", "docs": "/docs"}
 
 
-# --- API v1 routers (mounted from Sprint 1 onward) ---------------------------
-# from app.api.v1.router import api_router
-# app.include_router(api_router, prefix="/api/v1")
+# --- API v1 routers ----------------------------------------------------------
+app.include_router(api_router, prefix="/api/v1")
