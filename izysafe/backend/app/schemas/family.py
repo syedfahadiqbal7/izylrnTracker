@@ -38,3 +38,35 @@ class AcceptResponse(BaseModel):
     can_view: bool
     can_call: bool
     can_manage: bool
+
+
+class FamilyMemberResponse(BaseModel):
+    id: uuid.UUID                 # membership id
+    user_id: uuid.UUID
+    name: str | None = None
+    phone: str
+    role: str
+    is_primary: bool
+    can_view: bool
+    can_call: bool
+    can_manage: bool
+    joined_at: datetime
+
+
+class MemberUpdate(BaseModel):
+    role: _ROLE | None = None
+    can_view: bool | None = None
+    can_call: bool | None = None
+    can_manage: bool | None = None
+
+
+class PendingInviteResponse(BaseModel):
+    id: uuid.UUID
+    phone: str
+    role: str
+    can_view: bool
+    can_call: bool
+    can_manage: bool
+    expires_at: datetime
+    created_at: datetime
+    expired: bool
