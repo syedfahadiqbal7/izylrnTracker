@@ -42,9 +42,21 @@ class Settings(BaseSettings):
 
     # ---- OTP (Sprint 1) ----
     msg91_auth_key: str = ""
+    msg91_whatsapp_template: str = ""   # MSG91 WhatsApp template/flow id
     twilio_sid: str = ""
     twilio_token: str = ""
     twilio_from_number: str = ""
+
+    # OTP behaviour
+    otp_length: int = 6
+    otp_expiry_minutes: int = 10
+    otp_max_attempts: int = 3
+    whatsapp_fallback_seconds: int = 30   # wait before falling back to SMS
+
+    # Rate limits (Redis counters)
+    otp_rate_per_phone: int = 5           # per window
+    otp_rate_per_ip: int = 20             # per window
+    otp_rate_window_seconds: int = 3600   # 1 hour
 
     # ---- Payments (Sprint 6) ----
     razorpay_key_id: str = ""
