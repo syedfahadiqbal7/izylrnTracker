@@ -9,7 +9,7 @@ from app.api.deps import get_otp_gateway
 from app.core.database import get_db
 from app.core.errors import success
 from app.core.redis import get_redis
-from app.schemas.auth import SendOtpRequest
+from app.schemas.auth import SendOtpRequest, VerifyOtpRequest
 from app.services.otp_gateway import OtpGateway
 from app.services.otp_service import OtpService
 
@@ -28,4 +28,17 @@ async def send_otp(
     service = OtpService(db, redis, gateway)
     client_ip = request.client.host if request.client else None
     result = await service.send_otp(payload.phone, client_ip)
+    return success(result)
+
+
+@router.post("/verify-otp")
+async def verify_otp(
+    payload: VerifyOtpRequest,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+    gateway: OtpGateway = Depends(get_otp_gateway),
+) -> dict:
+    """Verify the OTP, create the user if new, and return JWT access+refresh tokens."""
+    service = OtpService(db, redis, gateway)
+    result = await service.verify_otp(payload.phone, payload.otp)
     return success(result)

@@ -11,13 +11,19 @@ import secrets
 from datetime import datetime, timedelta, timezone
 
 from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.errors import APIException
-from app.core.security import hash_secret
+from app.core.security import (
+    create_access_token,
+    create_refresh_token,
+    hash_secret,
+    verify_secret,
+)
 from app.core.validators import validate_phone
-from app.models.user import OtpSession
+from app.models.user import OtpSession, User
 from app.services.otp_gateway import OtpGateway
 
 
@@ -52,7 +58,74 @@ class OtpService:
             "channel": channel,
         }
 
+    async def verify_otp(self, phone: str, otp: str) -> dict:
+        phone = validate_phone(phone)
+        self._validate_otp_format(otp)
+
+        session = await self._latest_unverified_session(phone)
+        if session is None or session.expires_at <= datetime.now(timezone.utc):
+            raise APIException(400, "OTP_EXPIRED", "OTP has expired — tap Resend to get a new one")
+
+        if session.attempts >= settings.otp_max_attempts:
+            raise APIException(
+                429, "OTP_MAX_ATTEMPTS",
+                "Too many wrong attempts — please request a new OTP",
+            )
+
+        if not verify_secret(otp, session.otp_hash):
+            session.attempts += 1
+            await self.db.commit()
+            remaining = settings.otp_max_attempts - session.attempts
+            if remaining <= 0:
+                raise APIException(
+                    429, "OTP_MAX_ATTEMPTS",
+                    "Too many wrong attempts — please request a new OTP",
+                )
+            raise APIException(
+                400, "OTP_INVALID", f"Incorrect OTP — {remaining} attempts remaining"
+            )
+
+        # Correct OTP → consume the session and (find or) create the user.
+        session.verified = True
+        user, is_new = await self._get_or_create_user(phone)
+        await self.db.commit()
+
+        return {
+            "access_token": create_access_token(str(user.id)),
+            "refresh_token": create_refresh_token(str(user.id)),
+            "token_type": "bearer",
+            "is_new_user": is_new,
+        }
+
     # ---------------------------------------------------------------- helpers
+    def _validate_otp_format(self, otp: str) -> None:
+        if not otp or not otp.isdigit() or len(otp) != settings.otp_length:
+            raise APIException(
+                400, "OTP_INVALID_FORMAT",
+                f"OTP must be exactly {settings.otp_length} digits",
+            )
+
+    async def _latest_unverified_session(self, phone: str) -> OtpSession | None:
+        result = await self.db.execute(
+            select(OtpSession)
+            .where(OtpSession.phone == phone, OtpSession.verified.is_(False))
+            .order_by(OtpSession.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _get_or_create_user(self, phone: str) -> tuple[User, bool]:
+        existing = await self.db.execute(
+            select(User).where(User.phone == phone, User.deleted_at.is_(None))
+        )
+        user = existing.scalar_one_or_none()
+        if user is not None:
+            return user, False
+        user = User(phone=phone, country_code="+971" if phone.startswith("+971") else "+91")
+        self.db.add(user)
+        await self.db.flush()  # populate user.id for token subject
+        return user, True
+
     def _generate_otp(self) -> str:
         return str(secrets.randbelow(10 ** settings.otp_length)).zfill(settings.otp_length)
 
