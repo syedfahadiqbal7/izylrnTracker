@@ -45,3 +45,14 @@ class FakeRealtimeGateway:
     async def update_live_location(self, child_id: str, payload: dict) -> bool:
         self.calls.append((child_id, payload))
         return self.ok
+
+
+class FakeFcmGateway:
+    """Stand-in for FcmGateway: records multicast sends, returns token count."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []  # {tokens, title, body, data}
+
+    async def send(self, tokens, title, body, data=None) -> int:
+        self.calls.append({"tokens": list(tokens), "title": title, "body": body, "data": data})
+        return len(tokens)

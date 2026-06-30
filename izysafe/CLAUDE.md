@@ -9,7 +9,7 @@
 ## 0. Current State (update each sprint; keep terse)
 
 - **Done & on `main`:** Sprint 0 (infra, 33-table schema, partitioning) + Sprint 1 (Auth, User, Children, Family — 29 endpoints, 88 tests). PR #1 merged.
-- **In progress:** Sprint 2 (branch `sprint-2-location`) — real-time location pipeline. **Slice 1 DONE:** `POST /api/v1/webhook/traccar` hot path (secret-header auth → device resolve w/ Redis cache → validate → Redis latest cache + online TTL + `batch:locations` buffer). **Slice 2 DONE:** `BatchWriter` lifespan task (5s loop, RPOP-count drain ≤1000, bulk insert → `locations`, transient-fail re-queue, poison-row drop, `finally` shutdown flush). **Slice 3 DONE:** `RealtimeGateway` (Firebase RT DB `live_locations/{child_id}/latest`, sync SDK wrapped in `asyncio.to_thread`, no-op when creds absent) written off the hot path via `BackgroundTasks`; `firebase-admin>=6.5` added (image rebuild). 115 tests. Remaining: 4 device online/offline · 5 battery · 6 speed · 7 GET latest + geofence stub.
+- **In progress:** Sprint 2 (branch `sprint-2-location`) — real-time location pipeline. **Slice 1 DONE:** `POST /api/v1/webhook/traccar` hot path (secret-header auth → device resolve w/ Redis cache → validate → Redis latest cache + online TTL + `batch:locations` buffer). **Slice 2 DONE:** `BatchWriter` lifespan task (5s loop, RPOP-count drain ≤1000, bulk insert → `locations`, transient-fail re-queue, poison-row drop, `finally` shutdown flush). **Slice 3 DONE:** `RealtimeGateway` (Firebase RT DB `live_locations/{child_id}/latest`, sync SDK wrapped in `asyncio.to_thread`, no-op when creds absent) written off the hot path via `BackgroundTasks`; `firebase-admin>=6.5` added (image rebuild); **live-verified against real `izysafe-dev` RTDB**. **Slice 4 DONE:** device online/offline — hot path records `device:{id}:lastseen`; `DeviceStatusService.reconcile_online` (webhook BackgroundTask, `device:{id}:status` marker fast-path) flips online on transition; `DeviceStatusMonitor` lifespan sweep (60s) flips devices offline after 15min no data + fires `device_offline` alert; shared `FcmGateway` + `AlertService.notify_family` (inbox row per member + multicast FCM). 127 tests. Remaining: 5 battery · 6 speed · 7 GET latest + geofence stub.
 - **Run:** `cd izysafe && docker compose up -d` (postgres, redis@6380→6379, traccar, backend@8000). Tests: `docker compose run --rm backend pytest -q`.
 - **Auth runtime invariants:** JWT HS256 + Redis denylist (`denylist:{access,refresh}:{jti}`) + refresh rotation. `get_current_user` is **fail-open** on Redis down; refresh/logout **fail-closed**. Webhooks/device endpoints are NOT JWT (secret-key / device token).
 - **Authorization invariant:** all child access flows through `family_members` (no owner FK). Non-members get **404** (not 403). Primary parent is protected (can't be removed/demoted). Tier limits counted over the **primary parent**, incl. pending invites.
@@ -200,6 +200,9 @@ BACKEND_URL, ALLOWED_ORIGINS, ENVIRONMENT
 location:child:{child_id}:latest        {lat,lng,device_id,battery,ts}   24h
 location:device:{device_id}:latest       {lat,lng,battery,ts}             24h
 device:{device_id}:online                "1"                              5min sliding
+device:{device_id}:lastseen              epoch (receipt time)             24h
+device:{device_id}:status                "online"/"offline"               24h
+traccar_dev:{traccar_id}                 {device_id,child_id}             1h
 geofence:{child_id}:{fence_id}:inside     "true"/"false"                  72h
 geofence_debounce:{child_id}:{fence_id}   "1"                             5min
 sos:{child_id}:active                     "1"                             until resolved

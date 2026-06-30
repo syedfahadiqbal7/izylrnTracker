@@ -68,11 +68,16 @@ class LocationService:
         if not pos.valid or not _coords_valid(pos.latitude, pos.longitude):
             return ProcessResult(stored=False, reason="invalid_coordinates")
 
-        ts = pos.best_time or datetime.now(timezone.utc)
-        stale = (datetime.now(timezone.utc) - ts).total_seconds() > STALE_AFTER_SECONDS
+        now = datetime.now(timezone.utc)
+        ts = pos.best_time or now
+        stale = (now - ts).total_seconds() > STALE_AFTER_SECONDS
 
         live_payload = await self._write_cache(device_id, child_id, pos, ts)
         await self.redis.set(rk.device_online(device_id), "1", ex=rk.ONLINE_TTL)
+        # lastseen = receipt time (not fix time) — drives offline detection.
+        await self.redis.set(
+            rk.device_lastseen(device_id), str(now.timestamp()), ex=rk.LASTSEEN_TTL
+        )
         await self._enqueue_batch(device_id, child_id, pos, ts)
 
         return ProcessResult(

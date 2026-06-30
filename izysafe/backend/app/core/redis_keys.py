@@ -11,6 +11,8 @@ import uuid
 LOCATION_CACHE_TTL = 86_400   # location:*:latest — 24h
 ONLINE_TTL = 300              # device:{id}:online — 5min sliding "live" indicator
 TRACCAR_MAP_TTL = 3_600       # traccar_dev:{id} — device resolution cache, 1h
+LASTSEEN_TTL = 86_400         # device:{id}:lastseen — receipt epoch, 24h
+STATUS_TTL = 86_400           # device:{id}:status — persisted online/offline marker
 
 # ---- Fixed keys ------------------------------------------------------------
 BATCH_LOCATIONS = "batch:locations"   # LPUSH buffer drained every 5s → PostgreSQL
@@ -27,6 +29,17 @@ def loc_device_latest(device_id: uuid.UUID | str) -> str:
 
 def device_online(device_id: uuid.UUID | str) -> str:
     return f"device:{device_id}:online"
+
+
+def device_lastseen(device_id: uuid.UUID | str) -> str:
+    """Epoch seconds of the last position we *received* (liveness, not fix time)."""
+    return f"device:{device_id}:lastseen"
+
+
+def device_status(device_id: uuid.UUID | str) -> str:
+    """Last persisted is_online state ('online'/'offline') — fast-path to avoid a
+    DB read on every position when reconciling the online transition."""
+    return f"device:{device_id}:status"
 
 
 def traccar_device_map(traccar_id: int | str) -> str:

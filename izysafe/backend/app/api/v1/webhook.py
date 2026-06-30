@@ -10,10 +10,15 @@ from fastapi import APIRouter, BackgroundTasks, Depends
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_realtime_gateway, verify_traccar_secret
+from app.api.deps import (
+    get_device_status_service,
+    get_realtime_gateway,
+    verify_traccar_secret,
+)
 from app.core.database import get_db
 from app.core.redis import get_redis
 from app.schemas.location import TraccarForward
+from app.services.device_status import DeviceStatusService
 from app.services.location_service import LocationService
 from app.services.realtime_gateway import RealtimeGateway
 
@@ -27,10 +32,12 @@ async def traccar_position(
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
     realtime: RealtimeGateway = Depends(get_realtime_gateway),
+    device_status: DeviceStatusService = Depends(get_device_status_service),
 ) -> dict:
     """Ingest one decoded position: cache it, mark the device online, buffer it for
-    the batch writer (hot path). The Firebase live-map write runs off the hot path
-    in a BackgroundTask. Returns 200 with the disposition (accepted / ignored)."""
+    the batch writer (hot path). Off the hot path in BackgroundTasks: the Firebase
+    live-map write and the device online-transition reconcile. Returns 200 with the
+    disposition (accepted / ignored)."""
     result = await LocationService(db, redis).process_update(body)
     if not result.stored:
         return {"status": "ignored", "reason": result.reason}
@@ -38,4 +45,5 @@ async def traccar_position(
     background.add_task(
         realtime.update_live_location, str(result.child_id), result.live_payload
     )
+    background.add_task(device_status.reconcile_online, result.device_id)
     return {"status": "accepted", "stale": result.stale}

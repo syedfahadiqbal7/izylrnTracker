@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     traccar_api_password: str = ""
     traccar_webhook_secret: str = "change_me_webhook_secret"
 
+    # ---- Device status (Sprint 2) ----
+    device_offline_threshold_seconds: int = 900   # 15 min without a position → offline
+    device_sweep_interval_seconds: int = 60       # offline-detection sweep cadence
+
     # ---- Auth / JWT ----
     jwt_secret: str = "change_me"
     jwt_algorithm: str = "HS256"

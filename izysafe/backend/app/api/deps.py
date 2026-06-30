@@ -19,11 +19,13 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.database import get_db
+from app.core.database import AsyncSessionLocal, get_db
 from app.core.errors import APIException
 from app.core.redis import get_redis
 from app.core.security import decode_token
 from app.models.user import User
+from app.services.device_status import DeviceStatusService
+from app.services.fcm_gateway import FcmGateway
 from app.services.invite_gateway import InviteGateway
 from app.services.otp_gateway import OtpGateway
 from app.services.realtime_gateway import RealtimeGateway
@@ -42,6 +44,17 @@ def get_invite_gateway() -> InviteGateway:
 
 def get_realtime_gateway() -> RealtimeGateway:
     return RealtimeGateway()
+
+
+def get_fcm_gateway() -> FcmGateway:
+    return FcmGateway()
+
+
+def get_device_status_service(
+    redis: Redis = Depends(get_redis),
+) -> DeviceStatusService:
+    # Uses its own session factory (BackgroundTask runs after the request session closes).
+    return DeviceStatusService(AsyncSessionLocal, redis)
 
 
 async def verify_traccar_secret(

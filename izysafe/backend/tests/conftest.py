@@ -17,14 +17,35 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
-from app.api.deps import get_invite_gateway, get_otp_gateway, get_realtime_gateway
+from app.api.deps import (
+    get_device_status_service,
+    get_invite_gateway,
+    get_otp_gateway,
+    get_realtime_gateway,
+)
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.redis import get_redis
 from app.core.security import create_access_token
 from app.main import app
 from app.models.user import User
+from app.services.device_status import DeviceStatusService
 from tests.fakes import FakeGateway, FakeInviteGateway, FakeRealtimeGateway
+
+
+class NonClosingSession:
+    """Async context manager yielding the shared test session without closing it,
+    so a service's `async with session_factory()` stays inside the test's
+    savepoint/rollback isolation (shared by background tasks + lifespan loops)."""
+
+    def __init__(self, session) -> None:
+        self._session = session
+
+    async def __aenter__(self):
+        return self._session
+
+    async def __aexit__(self, *exc) -> bool:
+        return False
 
 # NullPool: never reuse an asyncpg connection across pytest-asyncio's
 # function-scoped event loops (each test gets a fresh connection on its own loop).
@@ -85,6 +106,11 @@ async def client(db_session, redis_client, fake_gateway, fake_invite_gateway, fa
     app.dependency_overrides[get_otp_gateway] = lambda: fake_gateway
     app.dependency_overrides[get_invite_gateway] = lambda: fake_invite_gateway
     app.dependency_overrides[get_realtime_gateway] = lambda: fake_realtime_gateway
+    # DeviceStatusService bound to the isolated test session (its reconcile runs in
+    # a BackgroundTask, after the request session would normally have closed).
+    app.dependency_overrides[get_device_status_service] = lambda: DeviceStatusService(
+        lambda: NonClosingSession(db_session), redis_client
+    )
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as c:
