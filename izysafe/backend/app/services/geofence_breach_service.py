@@ -7,9 +7,10 @@ schedule, and a 5-minute anti-jitter debounce — records a `geofence_events` ro
 fans an alert out to the family via `AlertService`.
 
 Performance (Decision E): the active-fence set + the child's name + the primary
-parent's timezone are cached per child in Redis (`active_fences:{child}`,
-invalidated by CRUD). The common no-transition ping then touches Redis only — no DB
-read. A DB session is opened only on a cache miss or when a transition actually fires.
+parent's timezone/tier + the child's School Mode config are cached per child in
+Redis (`active_fences:{child}`, invalidated by CRUD). The common no-transition ping
+then touches Redis only — no DB read. A DB session is opened only on a cache miss or
+when a transition actually fires.
 
 State machine, per fence:
   prev ← geofence:{child}:{fence}:inside   ('true'/'false'/None)
@@ -22,8 +23,15 @@ State machine, per fence:
       • the matching notify flag is on (notify_enter / notify_exit), AND
       • "now" falls inside the fence schedule (active_days + active_from/to,
         evaluated in the primary parent's timezone — Decision C), AND
+      • School Mode doesn't suppress it (see below), AND
       • no debounce marker is set for this child+fence.
   On a real fire we set geofence_debounce:{child}:{fence} (5 min).
+
+School Mode (F16, Basic+; Decision G), active when the child has it enabled, the
+primary parent is Basic+, and "now" is inside the child's school hours:
+  1. a school-zone (zone_type='school') ENTER becomes a `school_arrival` alert;
+  2. alerts for NON-school zones are suppressed (state still advances).
+`school_absent` detection is deferred to Sprint 6.
 """
 from __future__ import annotations
 
@@ -45,9 +53,13 @@ from app.models.child import Child, FamilyMember
 from app.models.location import Geofence, GeofenceEvent
 from app.models.user import User
 from app.services.alert_service import AlertService
+from app.services.children_service import effective_tier
 from app.services.fcm_gateway import FcmGateway
 
 logger = logging.getLogger("izysafe.geofence")
+
+# School Mode is a Basic+ feature (CLAUDE.md §10).
+SCHOOL_MODE_TIERS = {"basic", "premium", "school"}
 
 
 class GeofenceBreachService:
@@ -76,8 +88,10 @@ class GeofenceBreachService:
         if not fences:
             return
 
-        # (fence, direction) pairs that pass every gate and should fire.
-        to_fire: list[tuple[dict, str]] = []
+        school_now = self._school_in_session(bundle, now)
+
+        # (fence, direction, as_school_arrival) tuples that pass every gate.
+        to_fire: list[tuple[dict, str, bool]] = []
         for fence in fences:
             try:
                 inside = self._inside(fence, lat, lng)
@@ -101,9 +115,16 @@ class GeofenceBreachService:
                 continue
             if not self._within_schedule(fence, bundle["tz"], now):
                 continue
+
+            is_school_zone = fence["zone_type"] == "school"
+            # School Mode: during school hours, mute non-school zones entirely.
+            if school_now and not is_school_zone:
+                continue
             if await self.redis.get(rk.geofence_debounce(child_id, fence["id"])):
                 continue  # jitter debounce
-            to_fire.append((fence, direction))
+
+            as_arrival = school_now and is_school_zone and direction == "enter"
+            to_fire.append((fence, direction, as_arrival))
 
         if to_fire:
             await self._fire(child_id, device_id, lat, lng, bundle["child_name"], to_fire)
@@ -118,16 +139,13 @@ class GeofenceBreachService:
         )
 
     @staticmethod
-    def _within_schedule(fence: dict, tz_name: str, now: datetime) -> bool:
-        """Honor active_days + active_from/active_to in the parent's timezone.
-
-        A fence with no time window still honors active_days (the locked schema
-        default is Mon–Fri). Overnight windows (from > to) are supported.
-        """
-        days = fence.get("active_days") or []
-        af = fence.get("active_from")
-        at = fence.get("active_to")
-        if not days and not af:
+    def _in_window(
+        days: list[int], from_iso: str | None, to_iso: str | None, tz_name: str, now: datetime
+    ) -> bool:
+        """Whether `now` falls within a (active_days, time-range) window, evaluated in
+        tz_name. Empty days = every day; no time range = all day. Overnight ranges
+        (from > to) are supported."""
+        if not days and not from_iso:
             return True
         try:
             local = now.astimezone(ZoneInfo(tz_name))
@@ -136,13 +154,30 @@ class GeofenceBreachService:
 
         if days and local.isoweekday() not in days:
             return False
-        if af and at:
+        if from_iso and to_iso:
             t = local.time()
-            af_t, at_t = time.fromisoformat(af), time.fromisoformat(at)
-            in_window = af_t <= t <= at_t if af_t <= at_t else (t >= af_t or t <= at_t)
+            f, u = time.fromisoformat(from_iso), time.fromisoformat(to_iso)
+            in_window = f <= t <= u if f <= u else (t >= f or t <= u)
             if not in_window:
                 return False
         return True
+
+    def _within_schedule(self, fence: dict, tz_name: str, now: datetime) -> bool:
+        """Honor the fence's own active_days + active_from/active_to (parent tz)."""
+        return self._in_window(
+            fence.get("active_days") or [], fence.get("active_from"),
+            fence.get("active_to"), tz_name, now,
+        )
+
+    def _school_in_session(self, bundle: dict, now: datetime) -> bool:
+        """True when School Mode applies right now: enabled + Basic+ tier + within the
+        child's configured school hours (which must be set)."""
+        s = bundle["school"]
+        if not s["enabled"] or bundle["tier"] not in SCHOOL_MODE_TIERS:
+            return False
+        if not s["from"] or not s["to"]:
+            return False  # hours not configured → nothing to key off
+        return self._in_window(s["days"], s["from"], s["to"], bundle["tz"], now)
 
     async def _fire(
         self,
@@ -151,28 +186,26 @@ class GeofenceBreachService:
         lat: float,
         lng: float,
         child_name: str,
-        to_fire: list[tuple[dict, str]],
+        to_fire: list[tuple[dict, str, bool]],
     ) -> None:
         async with self.session_factory() as session:
             alerts = AlertService(session, self.fcm)
-            for fence, direction in to_fire:
-                fence_id = uuid.UUID(fence["id"])
+            for fence, direction, as_arrival in to_fire:
                 session.add(
                     GeofenceEvent(
                         child_id=child_id,
                         device_id=device_id,
-                        geofence_id=fence_id,
-                        event_type=direction,
+                        geofence_id=uuid.UUID(fence["id"]),
+                        event_type=direction,  # factual ledger: 'enter'/'exit'
                         lat=lat,
                         lng=lng,
                     )
                 )
-                entered = direction == "enter"
+                alert_type, title, body = self._alert_copy(
+                    fence, direction, as_arrival, child_name
+                )
                 await alerts.notify_family(
-                    child_id,
-                    "geofence_enter" if entered else "geofence_exit",
-                    f"{'Entered' if entered else 'Left'} {fence['name']}",
-                    f"{child_name} {'entered' if entered else 'left'} {fence['name']}.",
+                    child_id, alert_type, title, body,
                     {
                         "geofence_id": fence["id"],
                         "zone_type": fence["zone_type"],
@@ -183,13 +216,30 @@ class GeofenceBreachService:
             await session.commit()
 
         # Debounce only after a real fire (mirrors speed/battery ordering).
-        for fence, _ in to_fire:
+        for fence, direction, _ in to_fire:
             await self.redis.set(
                 rk.geofence_debounce(child_id, fence["id"]),
                 "1",
                 ex=settings.geofence_debounce_seconds,
             )
-            logger.info("Geofence %s for child %s (%s)", fence["id"], child_id, _)
+            logger.info("Geofence %s for child %s (%s)", fence["id"], child_id, direction)
+
+    @staticmethod
+    def _alert_copy(
+        fence: dict, direction: str, as_arrival: bool, child_name: str
+    ) -> tuple[str, str, str]:
+        if as_arrival:
+            return (
+                "school_arrival",
+                f"Arrived at {fence['name']}",
+                f"{child_name} arrived at {fence['name']}.",
+            )
+        entered = direction == "enter"
+        return (
+            "geofence_enter" if entered else "geofence_exit",
+            f"{'Entered' if entered else 'Left'} {fence['name']}",
+            f"{child_name} {'entered' if entered else 'left'} {fence['name']}.",
+        )
 
     async def _get_bundle(self, child_id: uuid.UUID) -> dict:
         """Active-fence bundle for a child, Redis-cached (Decision E)."""
@@ -214,7 +264,7 @@ class GeofenceBreachService:
         ).scalars().all()
         meta = (
             await session.execute(
-                select(Child.name, User.timezone)
+                select(Child, User)
                 .join(FamilyMember, FamilyMember.child_id == Child.id)
                 .join(User, User.id == FamilyMember.user_id)
                 .where(
@@ -224,11 +274,24 @@ class GeofenceBreachService:
                 )
             )
         ).first()
-        child_name = meta[0] if meta else "Your child"
-        tz = meta[1] if meta else "UTC"
+
+        if meta is None:
+            return {
+                "tz": "UTC", "child_name": "Your child", "tier": "free",
+                "school": {"enabled": False, "from": None, "to": None, "days": []},
+                "fences": [self._fence_dict(f) for f in fences],
+            }
+        child, parent = meta
         return {
-            "tz": tz,
-            "child_name": child_name,
+            "tz": parent.timezone,
+            "child_name": child.name,
+            "tier": effective_tier(parent),
+            "school": {
+                "enabled": child.school_mode_enabled,
+                "from": child.school_hours_from.isoformat() if child.school_hours_from else None,
+                "to": child.school_hours_to.isoformat() if child.school_hours_to else None,
+                "days": child.school_active_days,
+            },
             "fences": [self._fence_dict(f) for f in fences],
         }
 

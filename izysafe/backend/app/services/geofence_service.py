@@ -23,7 +23,7 @@ from app.core import redis_keys as rk
 from app.core.errors import APIException
 from app.core.geometry import is_inside_circle, is_inside_polygon
 from app.models.child import FamilyMember
-from app.models.location import Geofence
+from app.models.location import Geofence, GeofenceEvent
 from app.models.user import User
 from app.schemas.geofence import validate_shape
 from app.services.children_service import ChildrenService, effective_tier
@@ -83,6 +83,29 @@ class GeofenceService:
     ) -> Geofence:
         geofence, _ = await self._require_geofence(user.id, geofence_id, require)
         return geofence
+
+    async def list_events(
+        self, user, geofence_id: uuid.UUID, limit: int, offset: int
+    ) -> tuple[list[GeofenceEvent], int]:
+        """Enter/exit history for a zone (most recent first), with a total count."""
+        await self._require_geofence(user.id, geofence_id, "view")
+        total = (
+            await self.db.execute(
+                select(func.count())
+                .select_from(GeofenceEvent)
+                .where(GeofenceEvent.geofence_id == geofence_id)
+            )
+        ).scalar_one()
+        rows = (
+            await self.db.execute(
+                select(GeofenceEvent)
+                .where(GeofenceEvent.geofence_id == geofence_id)
+                .order_by(GeofenceEvent.timestamp.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+        ).scalars().all()
+        return list(rows), total
 
     # ----------------------------------------------------------------- update
     async def update_geofence(

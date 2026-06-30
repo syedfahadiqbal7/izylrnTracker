@@ -120,6 +120,18 @@ class GeofenceUpdate(BaseModel):
     _days = field_validator("active_days")(_validate_days)
 
 
+class GeofenceEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    geofence_id: uuid.UUID
+    device_id: uuid.UUID | None = None
+    event_type: str
+    lat: float | None = None
+    lng: float | None = None
+    timestamp: datetime
+
+
 class GeofenceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

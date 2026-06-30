@@ -2,12 +2,13 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
 from app.core.security import create_access_token
 from app.models.child import FamilyMember
-from app.models.location import Geofence
+from app.models.location import Geofence, GeofenceEvent
 from app.models.user import User
 
 CHILDREN = "/api/v1/children"
@@ -311,3 +312,46 @@ async def test_guardian_can_view_but_not_manage(client, auth_headers, db_session
     upd = await client.put(f"{GEOFENCES}/{gid}", headers=g_headers, json={"name": "Hacked"})
     assert upd.status_code == 403
     assert (await client.delete(f"{GEOFENCES}/{gid}", headers=g_headers)).status_code == 403
+
+
+# --------------------------------------------------------------------------- #
+# Events history — GET /geofences/{id}/events
+# --------------------------------------------------------------------------- #
+async def _add_event(db, child_id, geofence_id, event_type, ts):
+    db.add(GeofenceEvent(
+        child_id=child_id, geofence_id=geofence_id, event_type=event_type,
+        lat=18.5, lng=73.8, timestamp=ts,
+    ))
+    await db.flush()
+
+
+async def test_list_events_newest_first(client, auth_headers, db_session):
+    cid = await _make_child(client, auth_headers)
+    gid = (await _create(client, auth_headers, cid)).json()["data"]["id"]
+    base = datetime(2026, 6, 17, 8, 0, tzinfo=timezone.utc)
+    await _add_event(db_session, uuid.UUID(cid), uuid.UUID(gid), "enter", base)
+    await _add_event(db_session, uuid.UUID(cid), uuid.UUID(gid), "exit",
+                     base.replace(hour=15))
+
+    resp = await client.get(f"{GEOFENCES}/{gid}/events", headers=auth_headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["meta"]["total"] == 2
+    assert [e["event_type"] for e in body["data"]] == ["exit", "enter"]  # desc by time
+
+
+async def test_list_events_unknown_geofence_404(client, auth_headers):
+    resp = await client.get(f"{GEOFENCES}/{uuid.uuid4()}/events", headers=auth_headers)
+    assert resp.status_code == 404
+    assert resp.json()["code"] == "GEOFENCE_NOT_FOUND"
+
+
+async def test_list_events_non_member_404(client, auth_headers, db_session):
+    cid = await _make_child(client, auth_headers)
+    gid = (await _create(client, auth_headers, cid)).json()["data"]["id"]
+    stranger = User(phone="+919811111111", country_code="+91")
+    db_session.add(stranger)
+    await db_session.flush()
+    headers = {"Authorization": f"Bearer {create_access_token(str(stranger.id))}"}
+    resp = await client.get(f"{GEOFENCES}/{gid}/events", headers=headers)
+    assert resp.status_code == 404

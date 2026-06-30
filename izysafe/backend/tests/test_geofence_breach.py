@@ -49,14 +49,21 @@ IN_POLY = (18.55, 73.85)
 # --------------------------------------------------------------------------- #
 # Helpers
 # --------------------------------------------------------------------------- #
-async def _setup(db, *, tz="UTC", fcm="parent-tok", fence=True, **fence_kw):
+async def _setup(
+    db, *, tz="UTC", fcm="parent-tok", fence=True, tier="premium",
+    school_mode=False, school_from=None, school_to=None, school_days=None, **fence_kw,
+):
     parent = User(
         phone="+9198" + uuid.uuid4().hex[:8], country_code="+91",
-        subscription_tier="premium", fcm_token=fcm, timezone=tz,
+        subscription_tier=tier, fcm_token=fcm, timezone=tz,
     )
     db.add(parent)
     await db.flush()
-    child = Child(name="Aryan")
+    child = Child(
+        name="Aryan", school_mode_enabled=school_mode,
+        school_hours_from=school_from, school_hours_to=school_to,
+        school_active_days=(school_days or ALL_DAYS),
+    )
     db.add(child)
     await db.flush()
     db.add(FamilyMember(
@@ -326,6 +333,99 @@ async def test_crud_invalidates_cache(db_session, redis_client):
         {"name": "Park", "type": "circle", "center_lat": 18.4, "center_lng": 73.7, "radius_m": 150},
     )
     assert await redis_client.get(rk.active_fences(child.id)) is None
+
+
+# --------------------------------------------------------------------------- #
+# School Mode (F16, Basic+; Decision G). NOW = Wed 12:00 UTC.
+# --------------------------------------------------------------------------- #
+async def test_school_zone_enter_in_hours_is_arrival(db_session, redis_client):
+    child, _, _ = await _setup(
+        db_session, tier="basic", zone_type="school", name="School",
+        school_mode=True, school_from=time(8, 0), school_to=time(15, 0),
+    )
+    fcm = FakeFcmGateway()
+    svc = _svc(db_session, redis_client, fcm)
+    await svc.check_all_fences(child.id, *OUTSIDE, now=NOW)
+    await svc.check_all_fences(child.id, *INSIDE, now=NOW)
+
+    assert await _count_alerts(db_session, child.id, "school_arrival") == 1
+    assert await _count_alerts(db_session, child.id, "geofence_enter") == 0
+    assert await _count_events(db_session, child.id, "enter") == 1  # ledger unchanged
+    assert fcm.calls[-1]["data"]["type"] == "school_arrival"
+
+
+async def test_school_zone_enter_outside_hours_is_generic(db_session, redis_client):
+    child, _, _ = await _setup(
+        db_session, tier="basic", zone_type="school", name="School",
+        school_mode=True, school_from=time(13, 0), school_to=time(15, 0),  # excludes noon
+    )
+    svc = _svc(db_session, redis_client)
+    await svc.check_all_fences(child.id, *OUTSIDE, now=NOW)
+    await svc.check_all_fences(child.id, *INSIDE, now=NOW)
+    assert await _count_alerts(db_session, child.id, "geofence_enter") == 1
+    assert await _count_alerts(db_session, child.id, "school_arrival") == 0
+
+
+async def test_non_school_zone_suppressed_in_hours(db_session, redis_client):
+    child, _, fence = await _setup(
+        db_session, tier="basic", zone_type="home", name="Home",
+        school_mode=True, school_from=time(8, 0), school_to=time(15, 0),
+    )
+    svc = _svc(db_session, redis_client)
+    await svc.check_all_fences(child.id, *OUTSIDE, now=NOW)
+    await svc.check_all_fences(child.id, *INSIDE, now=NOW)
+    assert await _count_alerts(db_session, child.id, "geofence_enter") == 0
+    # state still advanced despite the School-Mode suppression
+    assert await redis_client.get(rk.geofence_inside(child.id, fence.id)) == "true"
+
+
+async def test_non_school_zone_not_suppressed_outside_hours(db_session, redis_client):
+    child, _, _ = await _setup(
+        db_session, tier="basic", zone_type="home", name="Home",
+        school_mode=True, school_from=time(13, 0), school_to=time(15, 0),  # excludes noon
+    )
+    svc = _svc(db_session, redis_client)
+    await svc.check_all_fences(child.id, *OUTSIDE, now=NOW)
+    await svc.check_all_fences(child.id, *INSIDE, now=NOW)
+    assert await _count_alerts(db_session, child.id, "geofence_enter") == 1
+
+
+async def test_school_mode_ignored_on_free_tier(db_session, redis_client):
+    child, _, _ = await _setup(
+        db_session, tier="free", zone_type="school", name="School",
+        school_mode=True, school_from=time(8, 0), school_to=time(15, 0),
+    )
+    svc = _svc(db_session, redis_client)
+    await svc.check_all_fences(child.id, *OUTSIDE, now=NOW)
+    await svc.check_all_fences(child.id, *INSIDE, now=NOW)
+    # Free tier → no School Mode: generic enter, no arrival upgrade.
+    assert await _count_alerts(db_session, child.id, "geofence_enter") == 1
+    assert await _count_alerts(db_session, child.id, "school_arrival") == 0
+
+
+async def test_school_mode_disabled_is_generic(db_session, redis_client):
+    child, _, _ = await _setup(
+        db_session, tier="basic", zone_type="school", name="School",
+        school_mode=False, school_from=time(8, 0), school_to=time(15, 0),
+    )
+    svc = _svc(db_session, redis_client)
+    await svc.check_all_fences(child.id, *OUTSIDE, now=NOW)
+    await svc.check_all_fences(child.id, *INSIDE, now=NOW)
+    assert await _count_alerts(db_session, child.id, "geofence_enter") == 1
+    assert await _count_alerts(db_session, child.id, "school_arrival") == 0
+
+
+async def test_school_zone_exit_in_hours_is_generic(db_session, redis_client):
+    child, _, _ = await _setup(
+        db_session, tier="basic", zone_type="school", name="School",
+        school_mode=True, school_from=time(8, 0), school_to=time(15, 0),
+    )
+    svc = _svc(db_session, redis_client)
+    await svc.check_all_fences(child.id, *INSIDE, now=NOW)    # baseline inside
+    await svc.check_all_fences(child.id, *OUTSIDE, now=NOW)   # exit
+    # Exit isn't an arrival, and school zones are exempt from suppression.
+    assert await _count_alerts(db_session, child.id, "geofence_exit") == 1
+    assert await _count_alerts(db_session, child.id, "school_arrival") == 0
 
 
 # --------------------------------------------------------------------------- #
