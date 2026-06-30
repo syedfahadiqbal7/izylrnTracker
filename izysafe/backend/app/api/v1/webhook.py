@@ -15,7 +15,7 @@ from app.api.deps import (
     get_device_status_service,
     get_geofence_breach_service,
     get_realtime_gateway,
-    get_sos_service,
+    get_sos_alarm_service,
     get_speed_service,
     verify_traccar_secret,
 )
@@ -27,7 +27,7 @@ from app.services.device_status import DeviceStatusService
 from app.services.geofence_breach_service import GeofenceBreachService
 from app.services.location_service import LocationService, _coords_valid
 from app.services.realtime_gateway import RealtimeGateway
-from app.services.sos_service import SosService
+from app.services.sos_service import SosAlarmService
 from app.services.speed_service import MIN_ALERT_SPEED_KMH, SpeedService
 
 router = APIRouter(prefix="/webhook", tags=["webhook"])
@@ -79,7 +79,7 @@ async def traccar_alarm(
     background: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
-    sos: SosService = Depends(get_sos_service),
+    sos: SosAlarmService = Depends(get_sos_alarm_service),
 ) -> dict:
     """Ingest a GT06 SOS alarm (Flow C). Secret-header authed like the position
     webhook; always 200 so Traccar's queue can't back up. Resolution is done inline

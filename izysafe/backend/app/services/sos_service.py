@@ -1,14 +1,18 @@
 """SOS emergency handling — Flow C (CLAUDE.md §5, decisions §3.6/§3.11).
 
-`trigger_from_alarm` runs in the alarm-webhook BackgroundTask. It is deliberately
-idempotent per active episode: **one active SOS per child** is enforced by the
-`uq_sos_one_active_per_child` partial unique index, with a Redis `sos:{child}:active`
-fast-path + a DB pre-check for dedup (Decision B). On a genuine trigger it:
+Two services, split like the geofence pair (request-path CRUD vs. background engine):
+  * ``SosAlarmService`` — runs in the alarm-webhook BackgroundTask; creates the SOS.
+  * ``SosService`` — request-path read/resolve API (Slice 2).
+
+``SosAlarmService.trigger_from_alarm`` is idempotent per active episode: **one active
+SOS per child** is enforced by the `uq_sos_one_active_per_child` partial unique index,
+with a Redis `sos:{child}:active` fast-path + a DB pre-check for dedup (Decision B).
+On a genuine trigger it:
   1. INSERTs an `sos_events` row (status='active'),
   2. inserts one `alerts` inbox row per family member + sends an **urgent** FCM
      (MAX priority, bypasses DND/School Mode — Decision C) via `AlertService`,
   3. writes the Firebase `sos/{child}` node the parent app streams,
-  4. sets the Redis active marker (cleared on resolve, Slice 2).
+  4. sets the Redis active marker (cleared on resolve).
 
 Location (Decision E): the alarm's own coordinates are used when valid; otherwise we
 fall back to the last-known Redis location and flag the event `approximate=true`.
@@ -27,7 +31,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import redis_keys as rk
-from app.models.child import Child
+from app.core.errors import APIException
+from app.models.child import Child, FamilyMember
 from app.models.sos import SosEvent
 from app.services.alert_service import AlertService
 from app.services.fcm_gateway import FcmGateway
@@ -37,7 +42,7 @@ from app.services.realtime_gateway import RealtimeGateway
 logger = logging.getLogger("izysafe.sos")
 
 
-class SosService:
+class SosAlarmService:
     def __init__(
         self,
         session_factory: Callable[[], AsyncSession],
@@ -132,3 +137,57 @@ class SosService:
             data = json.loads(cached)
             return data.get("lat"), data.get("lng"), True
         return None, None, True
+
+
+class SosService:
+    """Request-path SOS read/resolve API (Slice 2). Family-scoped via family_members:
+    a non-member sees nothing and gets 404 (never reveals existence)."""
+
+    def __init__(self, db: AsyncSession, redis: Redis, realtime: RealtimeGateway) -> None:
+        self.db = db
+        self.redis = redis
+        self.realtime = realtime
+
+    async def list_active(self, user) -> list[tuple[SosEvent, str]]:
+        """Active SOS events across all of the user's children (newest first)."""
+        rows = (
+            await self.db.execute(
+                select(SosEvent, Child.name)
+                .join(Child, Child.id == SosEvent.child_id)
+                .join(FamilyMember, FamilyMember.child_id == SosEvent.child_id)
+                .where(
+                    SosEvent.status == "active",
+                    FamilyMember.user_id == user.id,
+                    Child.deleted_at.is_(None),
+                )
+                .order_by(SosEvent.triggered_at.desc())
+            )
+        ).all()
+        return [(sos, name) for sos, name in rows]
+
+    async def resolve(self, user, sos_id: uuid.UUID) -> tuple[SosEvent, str]:
+        """Resolve an SOS (any family member — Decision F). Idempotent: re-resolving
+        an already-resolved event is a no-op. Clears the Firebase active flag + the
+        Redis marker so every parent's modal dismisses together."""
+        row = (
+            await self.db.execute(
+                select(SosEvent, Child.name)
+                .join(Child, Child.id == SosEvent.child_id)
+                .join(FamilyMember, FamilyMember.child_id == SosEvent.child_id)
+                .where(SosEvent.id == sos_id, FamilyMember.user_id == user.id)
+            )
+        ).first()
+        if row is None:
+            raise APIException(404, "SOS_NOT_FOUND", "SOS not found")
+        sos, child_name = row
+
+        if sos.status == "active":
+            sos.status = "resolved"
+            sos.resolved_at = datetime.now(timezone.utc)
+            sos.resolved_by = user.id
+            await self.db.commit()
+            await self.db.refresh(sos)
+            await self.redis.delete(rk.sos_active(sos.child_id))
+            await self.realtime.clear_sos(str(sos.child_id))
+            logger.info("SOS %s resolved by user %s", sos_id, user.id)
+        return sos, child_name

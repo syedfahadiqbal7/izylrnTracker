@@ -42,6 +42,7 @@ class FakeRealtimeGateway:
         self.ok = ok                                  # set False to simulate Firebase down
         self.calls: list[tuple[str, dict]] = []       # (child_id, payload)
         self.sos_calls: list[tuple[str, dict]] = []   # (child_id, sos payload)
+        self.sos_cleared: list[str] = []              # child_ids resolved
 
     async def update_live_location(self, child_id: str, payload: dict) -> bool:
         self.calls.append((child_id, payload))
@@ -49,6 +50,10 @@ class FakeRealtimeGateway:
 
     async def set_sos(self, child_id: str, payload: dict) -> bool:
         self.sos_calls.append((child_id, payload))
+        return self.ok
+
+    async def clear_sos(self, child_id: str) -> bool:
+        self.sos_cleared.append(child_id)
         return self.ok
 
 

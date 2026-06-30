@@ -49,8 +49,21 @@ class RealtimeGateway:
             logger.exception("Realtime DB SOS write failed for child %s", child_id)
             return False
 
+    async def clear_sos(self, child_id: str) -> bool:
+        """Flip the SOS node's `active` to False so every parent's full-screen modal
+        dismisses simultaneously on resolve (Flow C). Never raises."""
+        if not fb.is_ready():
+            logger.warning("Firebase not initialized — skipping SOS clear for %s", child_id)
+            return False
+        try:
+            await asyncio.to_thread(self._set, f"sos/{child_id}/active", False)
+            return True
+        except Exception:
+            logger.exception("Realtime DB SOS clear failed for child %s", child_id)
+            return False
+
     @staticmethod
-    def _set(path: str, payload: dict[str, Any]) -> None:
+    def _set(path: str, payload: Any) -> None:
         from firebase_admin import db
 
         db.reference(path).set(payload)

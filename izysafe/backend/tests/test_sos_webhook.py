@@ -19,7 +19,7 @@ from app.models.child import Child, FamilyMember
 from app.models.device import Device
 from app.models.sos import SosEvent
 from app.models.user import User
-from app.services.sos_service import SosService
+from app.services.sos_service import SosAlarmService
 from tests.conftest import NonClosingSession
 from tests.fakes import FakeFcmGateway, FakeRealtimeGateway
 
@@ -53,7 +53,7 @@ async def _setup(db, *, fcm="parent-tok", traccar_id=401):
 
 
 def _svc(db, redis, realtime=None, fcm=None):
-    return SosService(
+    return SosAlarmService(
         lambda: NonClosingSession(db), redis,
         realtime or FakeRealtimeGateway(), fcm or FakeFcmGateway(),
     )
@@ -81,7 +81,7 @@ def _alarm(traccar_id, imei, lat=LAT, lng=LNG, alarm="sos", valid=True):
 
 
 # --------------------------------------------------------------------------- #
-# SosService
+# SosAlarmService
 # --------------------------------------------------------------------------- #
 async def test_trigger_creates_sos_and_fans_out(db_session, redis_client):
     child, _, dev = await _setup(db_session)
