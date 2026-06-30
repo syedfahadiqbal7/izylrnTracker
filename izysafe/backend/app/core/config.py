@@ -58,6 +58,9 @@ class Settings(BaseSettings):
     traccar_monitor_template: str = "MONITOR,{phone}#"    # Sound Around: silent ambient listen
     traccar_callback_template: str = "CALLBACK,{phone}#"  # Two-way Call: duplex (Slice 2)
     sound_around_daily_limit: int = 3                     # Sound Around sessions per child per day
+    # No hang-up signal exists (audio is off-server), so a Two-way Call is considered
+    # "in progress" for this bounded window to block concurrent re-dials.
+    two_way_call_active_seconds: int = 300                # 5 min in-progress guard per child
 
     # ---- Auth / JWT ----
     jwt_secret: str = "change_me"

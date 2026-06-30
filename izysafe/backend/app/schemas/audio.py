@@ -16,3 +16,15 @@ class AudioSessionResponse(BaseModel):
     user_id: uuid.UUID
     started_at: datetime
     duration_s: int | None
+
+
+class CallRecordResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    child_id: uuid.UUID
+    device_id: uuid.UUID | None
+    initiated_by: uuid.UUID
+    status: str
+    started_at: datetime
+    duration_seconds: int | None
