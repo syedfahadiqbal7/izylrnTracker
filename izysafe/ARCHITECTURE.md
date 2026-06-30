@@ -4,9 +4,9 @@
 > actually built. For locked conventions and AI coding rules, see [`CLAUDE.md`](./CLAUDE.md).
 > For the full product specs, see [`../docs/`](../docs/).
 
-**Status:** Sprint 0 — Infrastructure & Canonical Schema ✅ COMPLETE
-**Next:** Sprint 1 — Authentication, OTP, User registration, Family management (backend-first)
-**Last updated:** End of Sprint 0
+**Status:** Sprint 2 — Real-time Location Pipeline ✅ COMPLETE
+**Next:** Sprint 3 — Geofences (zone CRUD, schedule, breach detection, polygon/circle, School Mode)
+**Last updated:** End of Sprint 2
 
 ---
 
@@ -71,15 +71,18 @@ flowchart LR
 ### Flow A — Live location (target < 1 second)
 ```
 Watch → GT06 packet → Traccar (:5023)
-  → POST /api/v1/webhook/traccar  (HMAC-validated)
-    → location_service.process_update():
-        validate (lat/lng bounds, ts fresh ≤5min, accuracy)
+  → POST /api/v1/webhook/traccar  (static X-Traccar-Secret header, constant-time compare)
+    → location_service.process_update():   [HOT PATH — Redis only]
+        validate (lat/lng bounds, valid flag, null-island); stale (>5min) → alerts suppressed
         Redis SETEX  location:child:{id}:latest      TTL 24h   (instant)
         Redis SETEX  location:device:{id}:latest     TTL 24h
         Redis SETEX  device:{id}:online = 1          TTL 300s  (sliding)
-        Firebase RT DB  live_locations/{child_id}/latest        (parent streams this)
+        Redis SET    device:{id}:lastseen            (offline detection)
         Redis LPUSH  batch:locations                  (flushed every 5s → PostgreSQL)
-        BackgroundTask: geofence_service.check_all_fences(child_id, lat, lng)
+    → BackgroundTasks [off hot path]:
+        Firebase RT DB  live_locations/{child_id}/latest        (parent streams this)
+        device online-transition reconcile · battery check · speed check
+        geofence_service.check_all_fences(child_id, lat, lng)   (Sprint 3)
   → Parent Flutter Firebase listener → Google Maps marker animates
 ```
 
@@ -164,7 +167,37 @@ Watch SOS button held 3s → GT06 alarm → Traccar
 
 ---
 
-## 7. Maintenance
+## 7. Sprint 1 Status — ✅ COMPLETE (merged to `main`, PR #1)
+
+Authentication, User, Children, and Family management — **29 endpoints, 88 tests**.
+
+- **Auth/OTP:** JWT HS256 (access 24h / refresh 30d) + Redis denylist (`denylist:{access,refresh}:{jti}`) with refresh rotation; OTP 6-digit bcrypt, WhatsApp→SMS fallback, Redis rate limits. `get_current_user` fail-open on Redis down; refresh/logout fail-closed.
+- **Children & Family:** ownership/authorization entirely through `family_members` (no owner FK); non-members get 404; primary parent protected; tier limits counted over the primary parent (incl. pending invites). Guardian invite + accept (strict phone match).
+
+---
+
+## 8. Sprint 2 Status — ✅ COMPLETE (real-time location pipeline)
+
+The full Flow A pipeline (Traccar → Redis → batch → Firebase → status/battery/speed alerts), built slice-by-slice with tests + live verification. **+56 tests (144 total).**
+
+| Slice | Delivered | Notes |
+|---|---|---|
+| 1 | `POST /webhook/traccar` hot path | secret-header auth, device-resolve (Redis cache), validation, always-ack 200; Redis-only writes |
+| 2 | 5s batch writer (lifespan loop) | FIFO drain ≤1000, bulk insert → `locations`, transient-fail requeue, poison-drop, shutdown flush |
+| 3 | Firebase RT DB live location | `RealtimeGateway`, sync SDK in `asyncio.to_thread`, off hot path, graceful when Firebase down |
+| 4 | Device online/offline | online-transition reconcile (BackgroundTask) + 60s offline sweep (15min) → `device_offline`; shared `FcmGateway` + `AlertService` |
+| 5 | Battery alerts | `low_battery`/`critical_battery`, per-level 4h debounce, escalation, recharge reset; guardian-accepted FCM (`family_join`) cleared |
+| 6 | Speed alerts | 3 sustained samples in 90s window, slowdown reset, 10min debounce, Basic+ tier-gated |
+
+**Architecture invariants held:** the webhook hot path is **Redis-only**; every check (battery/speed/online/geofence) runs in a `BackgroundTask` or lifespan loop (CLAUDE.md §4); all external gateways (Firebase RTDB, FCM) are faked in tests and degrade gracefully in production. Alert fan-out is uniform via `AlertService` (one `alerts` inbox row per family member + multicast FCM).
+
+**New runtime components:** `BatchWriter` + `DeviceStatusMonitor` (lifespan tasks); `RealtimeGateway`, `FcmGateway`, `AlertService`, `BatteryService`, `SpeedService`, `DeviceStatusService`. `firebase-admin` added (live-verified against the real `izysafe-dev` Realtime Database).
+
+**Not built (by design):** `GET /children/{id}/location/latest` read endpoint (the app streams live location from Firebase); geofence breach detection (Flow B) is Sprint 3 — the BackgroundTask call site is reserved but unwired.
+
+---
+
+## 9. Maintenance
 
 This file is updated at the **end of every sprint**: flip the status table, add any new
 components/flows introduced, and note schema changes (with the migration that made them).
