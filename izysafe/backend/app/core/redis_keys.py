@@ -82,3 +82,9 @@ def sos_active(child_id: uuid.UUID | str) -> str:
     """Set while a child has an active SOS (dedup + fast 'is-active' check); cleared
     on resolve. Flow C."""
     return f"sos:{child_id}:active"
+
+
+def sound_sessions(child_id: uuid.UUID | str) -> str:
+    """Daily Sound Around (F11) session counter per child; expires at the next
+    midnight in the primary parent's timezone (3/child/day gate, Sprint 5)."""
+    return f"sound_sessions:{child_id}"

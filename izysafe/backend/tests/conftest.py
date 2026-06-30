@@ -27,6 +27,7 @@ from app.api.deps import (
     get_realtime_gateway,
     get_sos_alarm_service,
     get_speed_service,
+    get_traccar_gateway,
 )
 from app.core.config import settings
 from app.core.database import get_db
@@ -39,7 +40,13 @@ from app.services.device_status import DeviceStatusService
 from app.services.geofence_breach_service import GeofenceBreachService
 from app.services.sos_service import SosAlarmService
 from app.services.speed_service import SpeedService
-from tests.fakes import FakeFcmGateway, FakeGateway, FakeInviteGateway, FakeRealtimeGateway
+from tests.fakes import (
+    FakeFcmGateway,
+    FakeGateway,
+    FakeInviteGateway,
+    FakeRealtimeGateway,
+    FakeTraccarGateway,
+)
 
 
 class NonClosingSession:
@@ -110,10 +117,15 @@ def fake_fcm_gateway() -> FakeFcmGateway:
     return FakeFcmGateway()
 
 
+@pytest.fixture
+def fake_traccar_gateway() -> FakeTraccarGateway:
+    return FakeTraccarGateway()
+
+
 @pytest_asyncio.fixture
 async def client(
     db_session, redis_client, fake_gateway, fake_invite_gateway,
-    fake_realtime_gateway, fake_fcm_gateway,
+    fake_realtime_gateway, fake_fcm_gateway, fake_traccar_gateway,
 ):
     async def _override_db():
         yield db_session
@@ -124,6 +136,7 @@ async def client(
     app.dependency_overrides[get_invite_gateway] = lambda: fake_invite_gateway
     app.dependency_overrides[get_realtime_gateway] = lambda: fake_realtime_gateway
     app.dependency_overrides[get_fcm_gateway] = lambda: fake_fcm_gateway
+    app.dependency_overrides[get_traccar_gateway] = lambda: fake_traccar_gateway
     # Services whose work runs in a BackgroundTask (after the request session would
     # have closed) are bound to the isolated test session + fake FCM.
     app.dependency_overrides[get_device_status_service] = lambda: DeviceStatusService(

@@ -57,6 +57,30 @@ class FakeRealtimeGateway:
         return self.ok
 
 
+class FakeTraccarGateway:
+    """Stand-in for TraccarGateway: records dispatched commands, returns configurable ok."""
+
+    def __init__(self, ok: bool = True) -> None:
+        self.ok = ok  # set False to simulate a rejected/failed command
+        self.calls: list[dict] = []                   # {traccar_id, data} for send_command
+        self.sound_around_calls: list[tuple[int, str]] = []   # (traccar_id, phone)
+        self.two_way_calls: list[tuple[int, str]] = []        # (traccar_id, phone)
+
+    async def send_command(
+        self, traccar_id: int, data: str, description: str = "IzySafe command"
+    ) -> bool:
+        self.calls.append({"traccar_id": traccar_id, "data": data, "description": description})
+        return self.ok
+
+    async def sound_around(self, traccar_id: int, phone: str) -> bool:
+        self.sound_around_calls.append((traccar_id, phone))
+        return await self.send_command(traccar_id, f"MONITOR,{phone}#")
+
+    async def two_way_call(self, traccar_id: int, phone: str) -> bool:
+        self.two_way_calls.append((traccar_id, phone))
+        return await self.send_command(traccar_id, f"CALLBACK,{phone}#")
+
+
 class FakeFcmGateway:
     """Stand-in for FcmGateway: records multicast sends, returns token count."""
 
