@@ -18,7 +18,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from app.api.deps import (
+    get_battery_service,
     get_device_status_service,
+    get_fcm_gateway,
     get_invite_gateway,
     get_otp_gateway,
     get_realtime_gateway,
@@ -29,8 +31,9 @@ from app.core.redis import get_redis
 from app.core.security import create_access_token
 from app.main import app
 from app.models.user import User
+from app.services.battery_service import BatteryService
 from app.services.device_status import DeviceStatusService
-from tests.fakes import FakeGateway, FakeInviteGateway, FakeRealtimeGateway
+from tests.fakes import FakeFcmGateway, FakeGateway, FakeInviteGateway, FakeRealtimeGateway
 
 
 class NonClosingSession:
@@ -96,8 +99,16 @@ def fake_realtime_gateway() -> FakeRealtimeGateway:
     return FakeRealtimeGateway()
 
 
+@pytest.fixture
+def fake_fcm_gateway() -> FakeFcmGateway:
+    return FakeFcmGateway()
+
+
 @pytest_asyncio.fixture
-async def client(db_session, redis_client, fake_gateway, fake_invite_gateway, fake_realtime_gateway):
+async def client(
+    db_session, redis_client, fake_gateway, fake_invite_gateway,
+    fake_realtime_gateway, fake_fcm_gateway,
+):
     async def _override_db():
         yield db_session
 
@@ -106,10 +117,14 @@ async def client(db_session, redis_client, fake_gateway, fake_invite_gateway, fa
     app.dependency_overrides[get_otp_gateway] = lambda: fake_gateway
     app.dependency_overrides[get_invite_gateway] = lambda: fake_invite_gateway
     app.dependency_overrides[get_realtime_gateway] = lambda: fake_realtime_gateway
-    # DeviceStatusService bound to the isolated test session (its reconcile runs in
-    # a BackgroundTask, after the request session would normally have closed).
+    app.dependency_overrides[get_fcm_gateway] = lambda: fake_fcm_gateway
+    # Services whose work runs in a BackgroundTask (after the request session would
+    # have closed) are bound to the isolated test session + fake FCM.
     app.dependency_overrides[get_device_status_service] = lambda: DeviceStatusService(
         lambda: NonClosingSession(db_session), redis_client
+    )
+    app.dependency_overrides[get_battery_service] = lambda: BatteryService(
+        lambda: NonClosingSession(db_session), redis_client, fake_fcm_gateway
     )
 
     transport = ASGITransport(app=app)

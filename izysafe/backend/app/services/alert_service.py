@@ -62,3 +62,31 @@ class AlertService:
 
         await self.fcm.send(tokens, title, body, {**(data or {}), "type": alert_type})
         return len(tokens)
+
+    async def notify_user(
+        self,
+        user_id: uuid.UUID,
+        alert_type: str,
+        title: str,
+        body: str,
+        child_id: uuid.UUID | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> int:
+        """Notify a single user (e.g. 'guardian accepted your invite'). Inserts one
+        inbox row and pushes to that user's token. Caller owns the transaction."""
+        user = await self.db.get(User, user_id)
+        if user is None or user.deleted_at is not None:
+            return 0
+        self.db.add(
+            Alert(
+                user_id=user_id,
+                child_id=child_id,
+                type=alert_type,
+                title=title,
+                body=body,
+                data=data,
+            )
+        )
+        tokens = [user.fcm_token] if user.fcm_token else []
+        await self.fcm.send(tokens, title, body, {**(data or {}), "type": alert_type})
+        return len(tokens)

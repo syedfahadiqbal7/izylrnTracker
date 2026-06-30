@@ -24,6 +24,7 @@ from app.core.errors import APIException
 from app.core.redis import get_redis
 from app.core.security import decode_token
 from app.models.user import User
+from app.services.battery_service import BatteryService
 from app.services.device_status import DeviceStatusService
 from app.services.fcm_gateway import FcmGateway
 from app.services.invite_gateway import InviteGateway
@@ -55,6 +56,14 @@ def get_device_status_service(
 ) -> DeviceStatusService:
     # Uses its own session factory (BackgroundTask runs after the request session closes).
     return DeviceStatusService(AsyncSessionLocal, redis)
+
+
+def get_battery_service(
+    redis: Redis = Depends(get_redis),
+    fcm: FcmGateway = Depends(get_fcm_gateway),
+) -> BatteryService:
+    # BackgroundTask → own session factory (the request session is gone by then).
+    return BatteryService(AsyncSessionLocal, redis, fcm)
 
 
 async def verify_traccar_secret(

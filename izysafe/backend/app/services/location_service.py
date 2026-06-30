@@ -37,6 +37,7 @@ class ProcessResult:
     stale: bool = False
     device_id: uuid.UUID | None = None
     child_id: uuid.UUID | None = None
+    battery: int | None = None          # percent, for the off-hot-path battery check
     # The child "latest" payload, reused for the off-hot-path Firebase live write.
     live_payload: dict | None = None
 
@@ -82,7 +83,7 @@ class LocationService:
 
         return ProcessResult(
             stored=True, stale=stale, device_id=device_id, child_id=child_id,
-            live_payload=live_payload,
+            battery=pos.battery_pct, live_payload=live_payload,
         )
 
     # --------------------------------------------------------------- internals

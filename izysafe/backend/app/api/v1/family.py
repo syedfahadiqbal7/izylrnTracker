@@ -6,7 +6,7 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_invite_gateway
+from app.api.deps import get_current_user, get_fcm_gateway, get_invite_gateway
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.errors import success
@@ -19,7 +19,9 @@ from app.schemas.family import (
     MemberUpdate,
     PendingInviteResponse,
 )
+from app.services.alert_service import AlertService
 from app.services.family_service import FamilyService
+from app.services.fcm_gateway import FcmGateway
 from app.services.invite_gateway import InviteGateway
 from app.services.invite_service import InviteService
 
@@ -74,9 +76,21 @@ async def accept_invite(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     gateway: InviteGateway = Depends(get_invite_gateway),
+    fcm: FcmGateway = Depends(get_fcm_gateway),
 ) -> dict:
     """Accept a guardian invite (the logged-in user's phone must match the invite)."""
-    child, membership = await InviteService(db, gateway).accept_invite(current_user, token)
+    child, membership, invite = await InviteService(db, gateway).accept_invite(
+        current_user, token
+    )
+    # Notify the inviter that the guardian accepted (Sprint-1 deferred FCM).
+    await AlertService(db, fcm).notify_user(
+        invite.invited_by,
+        "family_join",
+        "Guardian joined",
+        f"{current_user.name or 'A guardian'} accepted your invite for {child.name}.",
+        child_id=child.id,
+    )
+    await db.commit()
     body = AcceptResponse(
         child_id=child.id,
         child_name=child.name,

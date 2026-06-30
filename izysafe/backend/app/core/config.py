@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     device_offline_threshold_seconds: int = 900   # 15 min without a position → offline
     device_sweep_interval_seconds: int = 60       # offline-detection sweep cadence
 
+    # ---- Battery alerts (Sprint 2) ----
+    battery_critical_threshold: int = 5           # ≤5% → critical_battery (low = per-device)
+    battery_alert_cooldown_seconds: int = 14400   # 4h debounce per device + level
+
     # ---- Auth / JWT ----
     jwt_secret: str = "change_me"
     jwt_algorithm: str = "HS256"

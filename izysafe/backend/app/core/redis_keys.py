@@ -44,3 +44,8 @@ def device_status(device_id: uuid.UUID | str) -> str:
 
 def traccar_device_map(traccar_id: int | str) -> str:
     return f"traccar_dev:{traccar_id}"
+
+
+def battery_alerted(device_id: uuid.UUID | str) -> str:
+    """Debounce marker storing the last battery level alerted ('low'/'critical')."""
+    return f"battery_alerted:{device_id}"

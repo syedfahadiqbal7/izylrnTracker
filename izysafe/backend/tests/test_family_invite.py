@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app.core.security import create_access_token
+from app.models.alert import Alert
 from app.models.child import FamilyMember, Invite
 from app.models.user import User
 
@@ -184,6 +185,29 @@ async def test_accept_success(client, auth_headers, user, db_session):
 
     # the new guardian can now view the child
     assert (await client.get(f"/api/v1/children/{cid}", headers=g_headers)).status_code == 200
+
+
+async def test_accept_notifies_inviter(client, auth_headers, user, db_session, fake_fcm_gateway):
+    await _basic_parent(user, db_session)
+    user.fcm_token = "inviter-tok"          # inviter (primary parent) has a device
+    cid = await _make_child(client, auth_headers)
+    token = _token_of(await _invite(client, auth_headers, cid, G1))
+
+    guardian, g_headers = await _make_user(db_session, G1)
+    guardian.name = "Nani"
+    await db_session.flush()
+    resp = await client.post(f"/api/v1/invites/{token}/accept", headers=g_headers)
+    assert resp.status_code == 200
+
+    # the inviter got a family_join inbox row...
+    alert = (
+        await db_session.execute(select(Alert).where(Alert.user_id == user.id))
+    ).scalar_one()
+    assert alert.type == "family_join"
+    assert "Nani" in alert.body
+    # ...and an FCM push to their token
+    assert fake_fcm_gateway.calls[-1]["tokens"] == ["inviter-tok"]
+    assert fake_fcm_gateway.calls[-1]["data"]["type"] == "family_join"
 
 
 async def test_accept_phone_mismatch(client, auth_headers, user, db_session):

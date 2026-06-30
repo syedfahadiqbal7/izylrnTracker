@@ -11,6 +11,7 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
+    get_battery_service,
     get_device_status_service,
     get_realtime_gateway,
     verify_traccar_secret,
@@ -18,6 +19,7 @@ from app.api.deps import (
 from app.core.database import get_db
 from app.core.redis import get_redis
 from app.schemas.location import TraccarForward
+from app.services.battery_service import BatteryService
 from app.services.device_status import DeviceStatusService
 from app.services.location_service import LocationService
 from app.services.realtime_gateway import RealtimeGateway
@@ -33,11 +35,12 @@ async def traccar_position(
     redis: Redis = Depends(get_redis),
     realtime: RealtimeGateway = Depends(get_realtime_gateway),
     device_status: DeviceStatusService = Depends(get_device_status_service),
+    battery: BatteryService = Depends(get_battery_service),
 ) -> dict:
     """Ingest one decoded position: cache it, mark the device online, buffer it for
     the batch writer (hot path). Off the hot path in BackgroundTasks: the Firebase
-    live-map write and the device online-transition reconcile. Returns 200 with the
-    disposition (accepted / ignored)."""
+    live-map write, the device online-transition reconcile, and the battery check.
+    Returns 200 with the disposition (accepted / ignored)."""
     result = await LocationService(db, redis).process_update(body)
     if not result.stored:
         return {"status": "ignored", "reason": result.reason}
@@ -46,4 +49,6 @@ async def traccar_position(
         realtime.update_live_location, str(result.child_id), result.live_payload
     )
     background.add_task(device_status.reconcile_online, result.device_id)
+    if result.battery is not None:
+        background.add_task(battery.evaluate, result.device_id, result.battery)
     return {"status": "accepted", "stale": result.stale}
