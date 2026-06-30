@@ -97,7 +97,7 @@ class Geofence(Base, UUIDPkMixin, TimestampMixin, UpdatedAtMixin):
     notify_enter: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     notify_exit: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     active_days: Mapped[list[int]] = mapped_column(
-        ARRAY(Integer), nullable=False, server_default=text("ARRAY[1,2,3,4,5]")
+        ARRAY(Integer), nullable=False, server_default=text("ARRAY[1,2,3,4,5,6,7]")
     )
     active_from: Mapped[datetime | None] = mapped_column(Time)
     active_to: Mapped[datetime | None] = mapped_column(Time)

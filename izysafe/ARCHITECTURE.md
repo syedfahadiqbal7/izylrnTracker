@@ -4,9 +4,9 @@
 > actually built. For locked conventions and AI coding rules, see [`CLAUDE.md`](./CLAUDE.md).
 > For the full product specs, see [`../docs/`](../docs/).
 
-**Status:** Sprint 2 — Real-time Location Pipeline ✅ COMPLETE
-**Next:** Sprint 3 — Geofences (zone CRUD, schedule, breach detection, polygon/circle, School Mode)
-**Last updated:** End of Sprint 2
+**Status:** Sprint 3 — Geofences (Flow B) ✅ COMPLETE
+**Next:** Sprint 4 — (next in the Sprint Plan: remaining Phase-1 features / SOS / comms)
+**Last updated:** End of Sprint 3
 
 ---
 
@@ -197,7 +197,34 @@ The full Flow A pipeline (Traccar → Redis → batch → Firebase → status/ba
 
 ---
 
-## 9. Maintenance
+## 9. Sprint 3 Status — ✅ COMPLETE (geofences, Flow B)
+
+The full Flow B pipeline — zone CRUD → geometry → breach state machine → School
+Mode — built slice-by-slice with tests + live verification. **+70 tests (214 total).**
+
+| Slice | Delivered | Notes |
+|---|---|---|
+| 1 | Geofence CRUD + validation + tier gating | `POST/GET /children/{id}/geofences`, `GET/PUT/DELETE /geofences/{id}`; circle/polygon shape validation; per-child zone limit (Free 1 / Basic 5 / Premium·School ∞) + polygon=Premium+ (both 402); authz via `family_members` (404 for non-members); hard delete |
+| 2 | Pure-Python geometry engine | `haversine_m`, `is_inside_circle`, `is_inside_polygon` (ray-casting/PNPOLY); ORM-free, side-effect-free; `GeofenceService.is_point_inside` dispatch |
+| 3 | Breach detection engine | `GeofenceBreachService` (webhook BackgroundTask): enter/exit state machine (Redis `geofence:{child}:{fence}:inside`, 72h), baseline-first, notify flags, fence schedule (parent tz — Decision C), 5-min debounce, `geofence_events` + `AlertService` fan-out; **active-fence bundle cached** per child (Decision E), CRUD-invalidated; wired into `/webhook/traccar`, skipped on stale fixes |
+| 4 | School Mode + events history | school-zone enter → `school_arrival`, non-school alerts suppressed during school hours (Basic+; Decision G); `GET /geofences/{id}/events`. `school_absent` deferred to Sprint 6 |
+
+**Architecture invariants held:** breach checks run **only** in the webhook
+`BackgroundTask` (never the hot path); the common no-transition ping touches
+**Redis only** (cached fence bundle); alerts fan out uniformly via `AlertService`;
+the breach service uses a **session_factory** (own session). Geometry is pure
+Python (Decision A) — no PostGIS/NumPy.
+
+**Schema change:** migration `0002_geofence_active_days` widens the
+`geofences.active_days` DEFAULT from Mon–Fri to **all 7 days** (a zone with no
+explicit schedule now alerts 24/7). The child's `school_active_days` stays Mon–Fri.
+
+**New runtime components:** `GeofenceBreachService` (breach engine);
+`GeofenceService` gained Redis for cache invalidation; `geometry.py` core helpers.
+
+---
+
+## 10. Maintenance
 
 This file is updated at the **end of every sprint**: flip the status table, add any new
 components/flows introduced, and note schema changes (with the migration that made them).

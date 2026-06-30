@@ -74,7 +74,7 @@ async def test_create_circle(client, auth_headers):
     assert data["child_id"] == cid
     # defaults applied
     assert data["notify_enter"] is True and data["notify_exit"] is True
-    assert data["active_days"] == [1, 2, 3, 4, 5]
+    assert data["active_days"] == [1, 2, 3, 4, 5, 6, 7]
     assert data["color"] == "#4CAF50"
     assert data["active"] is True
 

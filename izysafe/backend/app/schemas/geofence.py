@@ -82,7 +82,7 @@ class GeofenceCreate(BaseModel):
     address: str | None = None
     notify_enter: bool = True
     notify_exit: bool = True
-    active_days: list[int] = Field(default_factory=lambda: [1, 2, 3, 4, 5])
+    active_days: list[int] = Field(default_factory=lambda: [1, 2, 3, 4, 5, 6, 7])
     active_from: time | None = None
     active_to: time | None = None
     active: bool = True
