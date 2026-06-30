@@ -20,6 +20,7 @@ class TraccarAttributes(BaseModel):
     battery_level: float | None = Field(default=None, alias="batteryLevel")  # percent 0–100
     battery: float | None = None  # often voltage; fallback only
     motion: bool | None = None
+    alarm: str | None = None  # GT06 alarm type, e.g. "sos" (drives the alarm webhook)
 
 
 class TraccarPositionIn(BaseModel):

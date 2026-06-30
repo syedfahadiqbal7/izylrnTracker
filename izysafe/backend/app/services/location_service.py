@@ -89,6 +89,13 @@ class LocationService:
             battery=pos.battery_pct, speed=pos.speed_kmh, live_payload=live_payload,
         )
 
+    async def resolve_device(
+        self, traccar_id: int, unique_id: str | None
+    ) -> tuple[uuid.UUID, uuid.UUID] | None:
+        """Public device→(device_id, child_id) resolution (Redis-cached), reused by
+        the SOS alarm webhook."""
+        return await self._resolve_device(traccar_id, unique_id)
+
     # --------------------------------------------------------------- internals
     async def _resolve_device(
         self, traccar_id: int, unique_id: str | None
