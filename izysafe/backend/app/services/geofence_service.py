@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIException
+from app.core.geometry import is_inside_circle, is_inside_polygon
 from app.models.child import FamilyMember
 from app.models.location import Geofence
 from app.models.user import User
@@ -106,6 +107,22 @@ class GeofenceService:
         geofence, _ = await self._require_geofence(user.id, geofence_id, "manage")
         await self.db.delete(geofence)  # hard delete — geofences have no soft-delete
         await self.db.commit()
+
+    # --------------------------------------------------------------- geometry
+    @staticmethod
+    def is_point_inside(geofence: Geofence, lat: float, lng: float) -> bool:
+        """Whether (lat, lng) falls inside a zone — dispatches on geofence.type.
+
+        Slice 2 building block (Decision A: pure-Python Haversine + ray-casting).
+        Slice 3's check_all_fences() will call this to drive enter/exit transitions
+        (Redis state + 5-min debounce + FCM fan-out). No DB/I/O here so it stays
+        cheap on the webhook BackgroundTask path.
+        """
+        if geofence.type == "polygon":
+            return is_inside_polygon(lat, lng, geofence.polygon_points or [])
+        return is_inside_circle(
+            lat, lng, geofence.center_lat, geofence.center_lng, geofence.radius_m
+        )
 
     # ---------------------------------------------------------------- helpers
     async def _child_tier(self, child_id: uuid.UUID) -> str:
