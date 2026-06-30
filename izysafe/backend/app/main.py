@@ -14,9 +14,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.router import api_router
 from app.core.config import settings
+from app.core.database import AsyncSessionLocal
 from app.core.errors import register_exception_handlers
 from app.core.firebase import init_firebase
-from app.core.redis import close_redis
+from app.core.redis import close_redis, redis_client
+from app.services.batch_writer import BatchWriter
+from app.services.device_status import DeviceStatusMonitor
+from app.services.fcm_gateway import FcmGateway
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("izysafe")
@@ -27,8 +31,16 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting IzySafe backend (env=%s)", settings.environment)
     init_firebase()  # no-op + warning if creds absent (Sprint 2 wires it fully)
+    batch_writer = BatchWriter(redis_client)
+    batch_writer.start()  # 5s loop: drain batch:locations → bulk insert (Flow A)
+    app.state.batch_writer = batch_writer
+    status_monitor = DeviceStatusMonitor(redis_client, AsyncSessionLocal, FcmGateway())
+    status_monitor.start()  # 60s loop: flip stale devices offline + alert
+    app.state.status_monitor = status_monitor
     yield
-    # Shutdown
+    # Shutdown — stop the loops before closing Redis.
+    await status_monitor.stop()
+    await batch_writer.stop()
     await close_redis()
     logger.info("IzySafe backend stopped.")
 

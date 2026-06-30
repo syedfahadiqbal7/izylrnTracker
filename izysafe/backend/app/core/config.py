@@ -34,6 +34,19 @@ class Settings(BaseSettings):
     traccar_api_password: str = ""
     traccar_webhook_secret: str = "change_me_webhook_secret"
 
+    # ---- Device status (Sprint 2) ----
+    device_offline_threshold_seconds: int = 900   # 15 min without a position → offline
+    device_sweep_interval_seconds: int = 60       # offline-detection sweep cadence
+
+    # ---- Battery alerts (Sprint 2) ----
+    battery_critical_threshold: int = 5           # ≤5% → critical_battery (low = per-device)
+    battery_alert_cooldown_seconds: int = 14400   # 4h debounce per device + level
+
+    # ---- Speed alerts (Sprint 2) ----
+    speed_window_seconds: int = 90                # sliding window for sustained samples
+    speed_required_samples: int = 3              # over-threshold samples before firing
+    speed_alert_cooldown_seconds: int = 600       # 10 min debounce per child
+
     # ---- Auth / JWT ----
     jwt_secret: str = "change_me"
     jwt_algorithm: str = "HS256"

@@ -6,6 +6,20 @@
 
 ---
 
+## 0. Current State (update each sprint; keep terse)
+
+- **Done & on `main`:** Sprint 0 (infra, 33-table schema, partitioning) + Sprint 1 (Auth, User, Children, Family — 29 endpoints, 88 tests). PR #1 merged.
+- **In progress:** Sprint 2 (branch `sprint-2-location`) — real-time location pipeline. **Slice 1 DONE:** `POST /api/v1/webhook/traccar` hot path (secret-header auth → device resolve w/ Redis cache → validate → Redis latest cache + online TTL + `batch:locations` buffer). **Slice 2 DONE:** `BatchWriter` lifespan task (5s loop, RPOP-count drain ≤1000, bulk insert → `locations`, transient-fail re-queue, poison-row drop, `finally` shutdown flush). **Slice 3 DONE:** `RealtimeGateway` (Firebase RT DB `live_locations/{child_id}/latest`, sync SDK wrapped in `asyncio.to_thread`, no-op when creds absent) written off the hot path via `BackgroundTasks`; `firebase-admin>=6.5` added (image rebuild); **live-verified against real `izysafe-dev` RTDB**. **Slice 4 DONE:** device online/offline — `DeviceStatusService.reconcile_online` (webhook BackgroundTask, `device:{id}:status` marker) + `DeviceStatusMonitor` lifespan sweep (60s, offline after 15min, `device_offline` alert); shared `FcmGateway` + `AlertService.notify_family`. **Slice 5 DONE:** battery alerts — `BatteryService.evaluate` (webhook BackgroundTask) reads device fresh, persists `last_battery` only on change, fires `low_battery` (≤`battery_threshold`) / `critical_battery` (≤5%) with per-level 4h debounce (`battery_alerted:{device_id}`), low→critical escalation, recharge reset; `AlertService.notify_user` added; Sprint-1 guardian-accepted FCM cleared (accept endpoint → `family_join` to inviter). **Slice 6 DONE:** speed alerts — `SpeedService.evaluate` (webhook BackgroundTask, gated to speed >20km/h to skip slow-ping DB reads): Basic+ tier + `speed_alert_enabled` gate, fires `speed` after `speed_required_samples` (3) over-threshold readings in a 90s sliding window (`speed_count:{child}`), slowdown resets, 10min debounce (`speed_alerted:{child}`). **Sprint 2 real-time pipeline COMPLETE** — 144 tests. (Optional follow-ups: `GET /children/{id}/location/latest` read endpoint; geofence is Sprint 3.)
+- **Run:** `cd izysafe && docker compose up -d` (postgres, redis@6380→6379, traccar, backend@8000). Tests: `docker compose run --rm backend pytest -q`.
+- **Auth runtime invariants:** JWT HS256 + Redis denylist (`denylist:{access,refresh}:{jti}`) + refresh rotation. `get_current_user` is **fail-open** on Redis down; refresh/logout **fail-closed**. Webhooks/device endpoints are NOT JWT (secret-key / device token).
+- **Authorization invariant:** all child access flows through `family_members` (no owner FK). Non-members get **404** (not 403). Primary parent is protected (can't be removed/demoted). Tier limits counted over the **primary parent**, incl. pending invites.
+- **Validation pattern:** structural/enum → Pydantic (422 `VALIDATION_ERROR`); semantic/business → service raises `APIException` with a precise code (e.g. `INVALID_PHONE`, `CHILD_LIMIT_REACHED`).
+- **Test isolation:** module-level async engine uses **NullPool** (function-scoped loops); per-test session bound to one connection with `join_transaction_mode="create_savepoint"` + outer rollback; fakeredis + fake gateways via `dependency_overrides`.
+- **Deferred (by design):** 30-day soft-delete purge job → Sprint 6 (Celery). (Guardian-accepted FCM done in Sprint 2 Slice 5.)
+- **Gotchas:** Alembic runs **sync** (psycopg2) via `settings.sync_database_url`; app is async (asyncpg). `zoneinfo` needs the `tzdata` dep (slim image). Traccar XML comments must not contain `--`. Image rebuild only needed when deps change; app/test code is volume-mounted.
+
+---
+
 ## 1. Project Context
 
 **What:** GPS child-safety platform for **India + UAE**. Sold standalone and bundled with
@@ -88,7 +102,7 @@ Pick the mechanism by job type — do not mix arbitrarily:
 ### Flow A — Live location (target < 1 second)
 ```
 Watch → GT06 packet → Traccar (:5023)
-  → POST /api/v1/webhook/traccar  (HMAC-validated)
+  → POST /api/v1/webhook/traccar  (static X-Traccar-Secret header, constant-time compare)
     → location_service.process_update():
         validate (lat/lng bounds, ts fresh ≤5min, accuracy)
         Redis SETEX  location:child:{id}:latest      TTL 24h   (instant)
@@ -158,7 +172,7 @@ Watch SOS button held 3s → GT06 alarm → Traccar
 - OTP via WhatsApp (primary) → SMS fallback after 30s. 6 digits, bcrypt hash, 10-min expiry, ≤3 attempts.
 - JWT **HS256**; access 24h, refresh 30d. Refresh rotates access tokens transparently in the Dio interceptor.
 - Phone formats: India `+91` + 10 digits (starts 6–9); UAE `+971` + 9 digits (starts 5).
-- Webhooks (`/webhook/traccar`, `/webhook/traccar/alarm`) authenticated by **secret key / HMAC**, never JWT.
+- Webhooks (`/webhook/traccar`, `/webhook/traccar/alarm`) authenticated by a **static shared-secret header** (`X-Traccar-Secret`, constant-time compared), never JWT. NB: stock Traccar's JSON forwarder can only send a fixed header — it cannot HMAC-sign the body — so auth = secret header + network trust (backend not publicly reachable).
 - Internal device endpoints (`/location/update`, `/sos/trigger`) use a **device token**, not JWT.
 - School admins authenticate by **email + password** (bcrypt), separate from parent OTP.
 
@@ -186,6 +200,9 @@ BACKEND_URL, ALLOWED_ORIGINS, ENVIRONMENT
 location:child:{child_id}:latest        {lat,lng,device_id,battery,ts}   24h
 location:device:{device_id}:latest       {lat,lng,battery,ts}             24h
 device:{device_id}:online                "1"                              5min sliding
+device:{device_id}:lastseen              epoch (receipt time)             24h
+device:{device_id}:status                "online"/"offline"               24h
+traccar_dev:{traccar_id}                 {device_id,child_id}             1h
 geofence:{child_id}:{fence_id}:inside     "true"/"false"                  72h
 geofence_debounce:{child_id}:{fence_id}   "1"                             5min
 sos:{child_id}:active                     "1"                             until resolved

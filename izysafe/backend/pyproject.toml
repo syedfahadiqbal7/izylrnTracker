@@ -24,6 +24,7 @@ dependencies = [
     "pyjwt>=2.8",              # JWT HS256
     "bcrypt>=4.1",             # OTP + password hashing
     "tzdata>=2024.1",          # IANA tz database for zoneinfo (slim image lacks it)
+    "firebase-admin>=6.5",     # Realtime DB live location (Sprint 2) + FCM (Sprint 2+)
 ]
 
 [project.optional-dependencies]

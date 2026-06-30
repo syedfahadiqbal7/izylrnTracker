@@ -33,3 +33,26 @@ class FakeInviteGateway:
     async def send_invite(self, phone: str, message: str) -> str | None:
         self.calls.append((phone, message))
         return self.channel
+
+
+class FakeRealtimeGateway:
+    """Stand-in for RealtimeGateway: records live-location writes."""
+
+    def __init__(self, ok: bool = True) -> None:
+        self.ok = ok                                  # set False to simulate Firebase down
+        self.calls: list[tuple[str, dict]] = []       # (child_id, payload)
+
+    async def update_live_location(self, child_id: str, payload: dict) -> bool:
+        self.calls.append((child_id, payload))
+        return self.ok
+
+
+class FakeFcmGateway:
+    """Stand-in for FcmGateway: records multicast sends, returns token count."""
+
+    def __init__(self) -> None:
+        self.calls: list[dict] = []  # {tokens, title, body, data}
+
+    async def send(self, tokens, title, body, data=None) -> int:
+        self.calls.append({"tokens": list(tokens), "title": title, "body": body, "data": data})
+        return len(tokens)

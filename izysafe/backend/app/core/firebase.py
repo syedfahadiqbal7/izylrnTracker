@@ -1,20 +1,25 @@
-"""Firebase Admin SDK wrapper (STUB — wired up in Sprint 2).
+"""Firebase Admin SDK initialization + availability.
 
-Initialization is lazy and fault-tolerant: importing this module must NOT crash
-when the service-account JSON is absent (e.g. during Sprint 0 / Sprint 1 tests).
-Real Realtime DB writes + FCM sends are implemented in Sprint 2.
+Initialization is fault-tolerant: importing this module must NOT crash when the
+service-account JSON is absent (tests, or any env without Firebase configured).
+The actual Realtime DB writes live in `services/realtime_gateway.py` (and FCM in
+a later slice), both of which short-circuit when `is_ready()` is False.
 """
 from __future__ import annotations
 
 import logging
 import os
-from typing import Any
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 _initialized = False
+
+
+def is_ready() -> bool:
+    """True once the Admin SDK has been initialized with valid credentials."""
+    return _initialized
 
 
 def init_firebase() -> bool:
@@ -41,17 +46,6 @@ def init_firebase() -> bool:
         _initialized = True
         logger.info("Firebase Admin initialized.")
         return True
-    except Exception:  # pragma: no cover - exercised in Sprint 2
+    except Exception:  # pragma: no cover - exercised only with real creds
         logger.exception("Failed to initialize Firebase Admin.")
         return False
-
-
-# --- Realtime DB / FCM helpers are implemented in Sprint 2 -------------------
-def update_live_location(child_id: str, payload: dict[str, Any]) -> None:
-    """Write live_locations/{child_id}/latest. Implemented in Sprint 2."""
-    raise NotImplementedError("Firebase RT DB writes are implemented in Sprint 2.")
-
-
-def set_sos(child_id: str, payload: dict[str, Any]) -> None:
-    """Write sos/{child_id}. Implemented in Sprint 4."""
-    raise NotImplementedError("SOS Firebase writes are implemented in Sprint 4.")

@@ -72,7 +72,9 @@ class InviteService:
         return invite, channel
 
     # ----------------------------------------------------------------- accept
-    async def accept_invite(self, user: User, token: str) -> tuple[Child, FamilyMember]:
+    async def accept_invite(
+        self, user: User, token: str
+    ) -> tuple[Child, FamilyMember, Invite]:
         invite = (
             await self.db.execute(select(Invite).where(Invite.token == token))
         ).scalar_one_or_none()
@@ -122,8 +124,8 @@ class InviteService:
         invite.accepted = True
         await self.db.commit()
         await self.db.refresh(membership)
-        # TODO(Sprint 2): FCM notify the primary parent that the guardian accepted.
-        return child, membership
+        # The endpoint notifies the inviter (family_join) off the returned invite.
+        return child, membership, invite
 
     # ---------------------------------------------------------------- helpers
     async def _guard_already_member(self, child_id: uuid.UUID, phone: str) -> None:
