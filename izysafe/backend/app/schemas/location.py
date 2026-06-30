@@ -53,6 +53,13 @@ class TraccarPositionIn(BaseModel):
             return None
         return max(0, min(100, int(round(raw))))
 
+    @property
+    def speed_kmh(self) -> float | None:
+        """Speed in km/h (Traccar reports knots), or None if absent."""
+        if self.speed is None:
+            return None
+        return round(self.speed * 1.852, 1)
+
 
 class TraccarDeviceIn(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)

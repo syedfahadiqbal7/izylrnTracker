@@ -14,6 +14,7 @@ from app.api.deps import (
     get_battery_service,
     get_device_status_service,
     get_realtime_gateway,
+    get_speed_service,
     verify_traccar_secret,
 )
 from app.core.database import get_db
@@ -23,6 +24,7 @@ from app.services.battery_service import BatteryService
 from app.services.device_status import DeviceStatusService
 from app.services.location_service import LocationService
 from app.services.realtime_gateway import RealtimeGateway
+from app.services.speed_service import MIN_ALERT_SPEED_KMH, SpeedService
 
 router = APIRouter(prefix="/webhook", tags=["webhook"])
 
@@ -36,11 +38,12 @@ async def traccar_position(
     realtime: RealtimeGateway = Depends(get_realtime_gateway),
     device_status: DeviceStatusService = Depends(get_device_status_service),
     battery: BatteryService = Depends(get_battery_service),
+    speed: SpeedService = Depends(get_speed_service),
 ) -> dict:
     """Ingest one decoded position: cache it, mark the device online, buffer it for
     the batch writer (hot path). Off the hot path in BackgroundTasks: the Firebase
-    live-map write, the device online-transition reconcile, and the battery check.
-    Returns 200 with the disposition (accepted / ignored)."""
+    live-map write, the device online-transition reconcile, and the battery + speed
+    checks. Returns 200 with the disposition (accepted / ignored)."""
     result = await LocationService(db, redis).process_update(body)
     if not result.stored:
         return {"status": "ignored", "reason": result.reason}
@@ -51,4 +54,8 @@ async def traccar_position(
     background.add_task(device_status.reconcile_online, result.device_id)
     if result.battery is not None:
         background.add_task(battery.evaluate, result.device_id, result.battery)
+    # Only when fast enough to possibly exceed a threshold — skips the DB read for
+    # the overwhelmingly common slow/stationary pings.
+    if result.speed is not None and result.speed > MIN_ALERT_SPEED_KMH:
+        background.add_task(speed.evaluate, result.child_id, result.speed)
     return {"status": "accepted", "stale": result.stale}

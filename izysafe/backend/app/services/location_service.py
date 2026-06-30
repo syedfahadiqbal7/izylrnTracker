@@ -24,7 +24,6 @@ from app.core import redis_keys as rk
 from app.models.device import Device
 from app.schemas.location import TraccarForward, TraccarPositionIn
 
-KNOTS_TO_KMH = 1.852
 STALE_AFTER_SECONDS = 300  # ts older than 5 min → stale (alerts suppressed downstream)
 
 
@@ -38,6 +37,7 @@ class ProcessResult:
     device_id: uuid.UUID | None = None
     child_id: uuid.UUID | None = None
     battery: int | None = None          # percent, for the off-hot-path battery check
+    speed: float | None = None          # km/h, for the off-hot-path speed check
     # The child "latest" payload, reused for the off-hot-path Firebase live write.
     live_payload: dict | None = None
 
@@ -83,7 +83,7 @@ class LocationService:
 
         return ProcessResult(
             stored=True, stale=stale, device_id=device_id, child_id=child_id,
-            battery=pos.battery_pct, live_payload=live_payload,
+            battery=pos.battery_pct, speed=pos.speed_kmh, live_payload=live_payload,
         )
 
     # --------------------------------------------------------------- internals
@@ -130,7 +130,6 @@ class LocationService:
     ) -> dict:
         """Write the child + device latest caches. Returns the child payload, which
         is reused verbatim for the Firebase live-map write (kept consistent)."""
-        speed_kmh = round(pos.speed * KNOTS_TO_KMH, 1) if pos.speed is not None else None
         ts_iso = ts.isoformat()
 
         child_payload = {
@@ -138,7 +137,7 @@ class LocationService:
             "lng": pos.longitude,
             "device_id": str(device_id),
             "battery": pos.battery_pct,
-            "speed": speed_kmh,
+            "speed": pos.speed_kmh,
             "accuracy": pos.accuracy,
             "bearing": pos.course,
             "is_moving": pos.attributes.motion,
@@ -172,7 +171,7 @@ class LocationService:
             "lat": pos.latitude,
             "lng": pos.longitude,
             "accuracy": pos.accuracy,
-            "speed": round(pos.speed * KNOTS_TO_KMH, 1) if pos.speed is not None else None,
+            "speed": pos.speed_kmh,
             "altitude": pos.altitude,
             "bearing": pos.course,
             "battery": pos.battery_pct,

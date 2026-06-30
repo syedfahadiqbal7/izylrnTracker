@@ -49,3 +49,13 @@ def traccar_device_map(traccar_id: int | str) -> str:
 def battery_alerted(device_id: uuid.UUID | str) -> str:
     """Debounce marker storing the last battery level alerted ('low'/'critical')."""
     return f"battery_alerted:{device_id}"
+
+
+def speed_count(child_id: uuid.UUID | str) -> str:
+    """Sliding-window counter of consecutive over-threshold speed samples."""
+    return f"speed_count:{child_id}"
+
+
+def speed_alerted(child_id: uuid.UUID | str) -> str:
+    """Debounce marker after a speed alert fires."""
+    return f"speed_alerted:{child_id}"

@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     battery_critical_threshold: int = 5           # ≤5% → critical_battery (low = per-device)
     battery_alert_cooldown_seconds: int = 14400   # 4h debounce per device + level
 
+    # ---- Speed alerts (Sprint 2) ----
+    speed_window_seconds: int = 90                # sliding window for sustained samples
+    speed_required_samples: int = 3              # over-threshold samples before firing
+    speed_alert_cooldown_seconds: int = 600       # 10 min debounce per child
+
     # ---- Auth / JWT ----
     jwt_secret: str = "change_me"
     jwt_algorithm: str = "HS256"

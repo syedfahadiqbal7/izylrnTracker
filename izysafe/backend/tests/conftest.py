@@ -24,6 +24,7 @@ from app.api.deps import (
     get_invite_gateway,
     get_otp_gateway,
     get_realtime_gateway,
+    get_speed_service,
 )
 from app.core.config import settings
 from app.core.database import get_db
@@ -33,6 +34,7 @@ from app.main import app
 from app.models.user import User
 from app.services.battery_service import BatteryService
 from app.services.device_status import DeviceStatusService
+from app.services.speed_service import SpeedService
 from tests.fakes import FakeFcmGateway, FakeGateway, FakeInviteGateway, FakeRealtimeGateway
 
 
@@ -124,6 +126,9 @@ async def client(
         lambda: NonClosingSession(db_session), redis_client
     )
     app.dependency_overrides[get_battery_service] = lambda: BatteryService(
+        lambda: NonClosingSession(db_session), redis_client, fake_fcm_gateway
+    )
+    app.dependency_overrides[get_speed_service] = lambda: SpeedService(
         lambda: NonClosingSession(db_session), redis_client, fake_fcm_gateway
     )
 
