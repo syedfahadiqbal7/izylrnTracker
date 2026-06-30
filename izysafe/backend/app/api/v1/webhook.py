@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import (
     get_battery_service,
     get_device_status_service,
+    get_geofence_breach_service,
     get_realtime_gateway,
     get_speed_service,
     verify_traccar_secret,
@@ -22,6 +23,7 @@ from app.core.redis import get_redis
 from app.schemas.location import TraccarForward
 from app.services.battery_service import BatteryService
 from app.services.device_status import DeviceStatusService
+from app.services.geofence_breach_service import GeofenceBreachService
 from app.services.location_service import LocationService
 from app.services.realtime_gateway import RealtimeGateway
 from app.services.speed_service import MIN_ALERT_SPEED_KMH, SpeedService
@@ -39,6 +41,7 @@ async def traccar_position(
     device_status: DeviceStatusService = Depends(get_device_status_service),
     battery: BatteryService = Depends(get_battery_service),
     speed: SpeedService = Depends(get_speed_service),
+    geofence: GeofenceBreachService = Depends(get_geofence_breach_service),
 ) -> dict:
     """Ingest one decoded position: cache it, mark the device online, buffer it for
     the batch writer (hot path). Off the hot path in BackgroundTasks: the Firebase
@@ -52,6 +55,13 @@ async def traccar_position(
         realtime.update_live_location, str(result.child_id), result.live_payload
     )
     background.add_task(device_status.reconcile_online, result.device_id)
+    # Geofence breach detection — skipped on stale fixes (an old position must not
+    # raise a fresh enter/exit alert; CLAUDE.md §5).
+    if not result.stale:
+        background.add_task(
+            geofence.check_all_fences,
+            result.child_id, result.lat, result.lng, result.device_id,
+        )
     if result.battery is not None:
         background.add_task(battery.evaluate, result.device_id, result.battery)
     # Only when fast enough to possibly exceed a threshold — skips the DB read for

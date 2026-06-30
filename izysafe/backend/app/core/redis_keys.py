@@ -13,6 +13,8 @@ ONLINE_TTL = 300              # device:{id}:online — 5min sliding "live" indic
 TRACCAR_MAP_TTL = 3_600       # traccar_dev:{id} — device resolution cache, 1h
 LASTSEEN_TTL = 86_400         # device:{id}:lastseen — receipt epoch, 24h
 STATUS_TTL = 86_400           # device:{id}:status — persisted online/offline marker
+GEOFENCE_STATE_TTL = 259_200  # geofence:{child}:{fence}:inside — 72h (Flow B)
+ACTIVE_FENCES_TTL = 3_600     # active_fences:{child} — cached active fence set, 1h backstop
 
 # ---- Fixed keys ------------------------------------------------------------
 BATCH_LOCATIONS = "batch:locations"   # LPUSH buffer drained every 5s → PostgreSQL
@@ -59,3 +61,18 @@ def speed_count(child_id: uuid.UUID | str) -> str:
 def speed_alerted(child_id: uuid.UUID | str) -> str:
     """Debounce marker after a speed alert fires."""
     return f"speed_alerted:{child_id}"
+
+
+def geofence_inside(child_id: uuid.UUID | str, fence_id: uuid.UUID | str) -> str:
+    """Last-known inside/outside state ('true'/'false') per child+fence (Flow B)."""
+    return f"geofence:{child_id}:{fence_id}:inside"
+
+
+def geofence_debounce(child_id: uuid.UUID | str, fence_id: uuid.UUID | str) -> str:
+    """5-min anti-jitter debounce after a breach alert fires for a child+fence."""
+    return f"geofence_debounce:{child_id}:{fence_id}"
+
+
+def active_fences(child_id: uuid.UUID | str) -> str:
+    """Cached active-fence bundle for a child (Decision E); invalidated on CRUD."""
+    return f"active_fences:{child_id}"

@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     speed_required_samples: int = 3              # over-threshold samples before firing
     speed_alert_cooldown_seconds: int = 600       # 10 min debounce per child
 
+    # ---- Geofences (Sprint 3) ----
+    geofence_debounce_seconds: int = 300          # 5 min anti-jitter debounce per child+fence
+
     # ---- Auth / JWT ----
     jwt_secret: str = "change_me"
     jwt_algorithm: str = "HS256"

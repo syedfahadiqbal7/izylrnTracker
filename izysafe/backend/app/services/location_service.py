@@ -36,6 +36,8 @@ class ProcessResult:
     stale: bool = False
     device_id: uuid.UUID | None = None
     child_id: uuid.UUID | None = None
+    lat: float | None = None            # for the off-hot-path geofence breach check
+    lng: float | None = None
     battery: int | None = None          # percent, for the off-hot-path battery check
     speed: float | None = None          # km/h, for the off-hot-path speed check
     # The child "latest" payload, reused for the off-hot-path Firebase live write.
@@ -83,6 +85,7 @@ class LocationService:
 
         return ProcessResult(
             stored=True, stale=stale, device_id=device_id, child_id=child_id,
+            lat=pos.latitude, lng=pos.longitude,
             battery=pos.battery_pct, speed=pos.speed_kmh, live_payload=live_payload,
         )
 

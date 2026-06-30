@@ -335,7 +335,8 @@ CREATE TABLE geofences (
     -- Notification + schedule
     notify_enter    BOOLEAN NOT NULL DEFAULT TRUE,
     notify_exit     BOOLEAN NOT NULL DEFAULT TRUE,
-    active_days     INTEGER[] NOT NULL DEFAULT ARRAY[1,2,3,4,5],
+    -- Default to every day: a zone with no explicit schedule alerts 24/7 (Sprint 3).
+    active_days     INTEGER[] NOT NULL DEFAULT ARRAY[1,2,3,4,5,6,7],
     active_from     TIME,
     active_to       TIME,
     active          BOOLEAN NOT NULL DEFAULT TRUE,

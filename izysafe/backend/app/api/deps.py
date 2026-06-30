@@ -27,6 +27,7 @@ from app.models.user import User
 from app.services.battery_service import BatteryService
 from app.services.device_status import DeviceStatusService
 from app.services.fcm_gateway import FcmGateway
+from app.services.geofence_breach_service import GeofenceBreachService
 from app.services.speed_service import SpeedService
 from app.services.invite_gateway import InviteGateway
 from app.services.otp_gateway import OtpGateway
@@ -72,6 +73,14 @@ def get_speed_service(
     fcm: FcmGateway = Depends(get_fcm_gateway),
 ) -> SpeedService:
     return SpeedService(AsyncSessionLocal, redis, fcm)
+
+
+def get_geofence_breach_service(
+    redis: Redis = Depends(get_redis),
+    fcm: FcmGateway = Depends(get_fcm_gateway),
+) -> GeofenceBreachService:
+    # BackgroundTask → own session factory (the request session is gone by then).
+    return GeofenceBreachService(AsyncSessionLocal, redis, fcm)
 
 
 async def verify_traccar_secret(
