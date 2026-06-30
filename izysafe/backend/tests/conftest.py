@@ -25,6 +25,7 @@ from app.api.deps import (
     get_invite_gateway,
     get_otp_gateway,
     get_realtime_gateway,
+    get_sos_service,
     get_speed_service,
 )
 from app.core.config import settings
@@ -36,6 +37,7 @@ from app.models.user import User
 from app.services.battery_service import BatteryService
 from app.services.device_status import DeviceStatusService
 from app.services.geofence_breach_service import GeofenceBreachService
+from app.services.sos_service import SosService
 from app.services.speed_service import SpeedService
 from tests.fakes import FakeFcmGateway, FakeGateway, FakeInviteGateway, FakeRealtimeGateway
 
@@ -135,6 +137,10 @@ async def client(
     )
     app.dependency_overrides[get_geofence_breach_service] = lambda: GeofenceBreachService(
         lambda: NonClosingSession(db_session), redis_client, fake_fcm_gateway
+    )
+    app.dependency_overrides[get_sos_service] = lambda: SosService(
+        lambda: NonClosingSession(db_session), redis_client,
+        fake_realtime_gateway, fake_fcm_gateway,
     )
 
     transport = ASGITransport(app=app)

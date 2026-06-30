@@ -36,6 +36,19 @@ class RealtimeGateway:
             logger.exception("Realtime DB write failed for child %s", child_id)
             return False
 
+    async def set_sos(self, child_id: str, payload: dict[str, Any]) -> bool:
+        """Write the active SOS node the parent app streams (Flow C). Resolve clears
+        it (Slice 2). Never raises — a Firebase blip must not lose the DB SOS."""
+        if not fb.is_ready():
+            logger.warning("Firebase not initialized — skipping SOS write for %s", child_id)
+            return False
+        try:
+            await asyncio.to_thread(self._set, f"sos/{child_id}", payload)
+            return True
+        except Exception:
+            logger.exception("Realtime DB SOS write failed for child %s", child_id)
+            return False
+
     @staticmethod
     def _set(path: str, payload: dict[str, Any]) -> None:
         from firebase_admin import db

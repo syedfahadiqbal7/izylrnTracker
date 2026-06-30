@@ -34,9 +34,11 @@ class AlertService:
         title: str,
         body: str,
         data: dict[str, Any] | None = None,
+        urgent: bool = False,
     ) -> int:
         """Insert inbox rows for every family member and push to their devices.
-        Returns the number of FCM tokens targeted (for logging/tests)."""
+        Returns the number of FCM tokens targeted (for logging/tests). urgent=True
+        sends a MAX-priority push that bypasses DND (SOS — Flow C)."""
         members = (
             await self.db.execute(
                 select(User)
@@ -60,7 +62,9 @@ class AlertService:
             if user.fcm_token:
                 tokens.append(user.fcm_token)
 
-        await self.fcm.send(tokens, title, body, {**(data or {}), "type": alert_type})
+        await self.fcm.send(
+            tokens, title, body, {**(data or {}), "type": alert_type}, urgent=urgent
+        )
         return len(tokens)
 
     async def notify_user(

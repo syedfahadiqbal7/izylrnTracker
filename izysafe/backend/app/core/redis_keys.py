@@ -76,3 +76,9 @@ def geofence_debounce(child_id: uuid.UUID | str, fence_id: uuid.UUID | str) -> s
 def active_fences(child_id: uuid.UUID | str) -> str:
     """Cached active-fence bundle for a child (Decision E); invalidated on CRUD."""
     return f"active_fences:{child_id}"
+
+
+def sos_active(child_id: uuid.UUID | str) -> str:
+    """Set while a child has an active SOS (dedup + fast 'is-active' check); cleared
+    on resolve. Flow C."""
+    return f"sos:{child_id}:active"
