@@ -17,7 +17,7 @@ from app.core.config import settings
 from app.models.alert import Alert
 from app.models.child import Child, FamilyMember
 from app.models.device import Device
-from app.models.sos import SosEvent
+from app.models.sos import EmergencyContact, SosEvent
 from app.models.user import User
 from app.services.sos_service import SosAlarmService
 from tests.conftest import NonClosingSession
@@ -150,6 +150,49 @@ async def test_deleted_child_no_sos(db_session, redis_client):
     sos_id = await _svc(db_session, redis_client).trigger_from_alarm(child.id, dev.id, LAT, LNG)
     assert sos_id is None
     assert await _active_count(db_session, child.id) == 0
+
+
+# --------------------------------------------------------------------------- #
+# Emergency-contact fan-out (Slice 3, Decision D)
+# --------------------------------------------------------------------------- #
+async def test_sos_pushes_to_app_user_emergency_contact(db_session, redis_client):
+    child, _, dev = await _setup(db_session)
+    db_session.add(User(phone="+919812345678", country_code="+91", fcm_token="ec-tok"))
+    db_session.add(EmergencyContact(
+        child_id=child.id, name="Gran", phone="+919812345678", is_app_user=True,
+    ))
+    await db_session.flush()
+    fcm = FakeFcmGateway()
+    await _svc(db_session, redis_client, fcm=fcm).trigger_from_alarm(child.id, dev.id, LAT, LNG)
+
+    pushed = [t for c in fcm.calls for t in c["tokens"]]
+    assert "ec-tok" in pushed and "parent-tok" in pushed
+    assert all(c["urgent"] for c in fcm.calls if c["tokens"])
+
+
+async def test_sos_skips_non_app_emergency_contact(db_session, redis_client):
+    child, _, dev = await _setup(db_session)
+    db_session.add(EmergencyContact(  # no user account with this phone
+        child_id=child.id, name="Neighbor", phone="+919800000011", is_app_user=False,
+    ))
+    await db_session.flush()
+    fcm = FakeFcmGateway()
+    await _svc(db_session, redis_client, fcm=fcm).trigger_from_alarm(child.id, dev.id, LAT, LNG)
+    pushed = [t for c in fcm.calls for t in c["tokens"]]
+    assert pushed == ["parent-tok"]  # only the family member
+
+
+async def test_sos_no_double_push_for_family_contact(db_session, redis_client):
+    # A contact who is ALSO a family member is notified once (via family), not twice.
+    child, parent, dev = await _setup(db_session)
+    db_session.add(EmergencyContact(
+        child_id=child.id, name="Self", phone=parent.phone, is_app_user=True,
+    ))
+    await db_session.flush()
+    fcm = FakeFcmGateway()
+    await _svc(db_session, redis_client, fcm=fcm).trigger_from_alarm(child.id, dev.id, LAT, LNG)
+    pushed = [t for c in fcm.calls for t in c["tokens"]]
+    assert pushed.count("parent-tok") == 1
 
 
 # --------------------------------------------------------------------------- #

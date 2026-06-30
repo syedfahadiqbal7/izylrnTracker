@@ -33,7 +33,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import redis_keys as rk
 from app.core.errors import APIException
 from app.models.child import Child, FamilyMember
-from app.models.sos import SosEvent
+from app.models.sos import EmergencyContact, SosEvent
+from app.models.user import User
 from app.services.alert_service import AlertService
 from app.services.fcm_gateway import FcmGateway
 from app.services.location_service import _coords_valid
@@ -100,14 +101,16 @@ class SosAlarmService:
                 return None  # raced another alarm → that one wins
             sos_id = sos.id
 
+            title = "🚨 SOS Alert"
+            body = f"{child.name} triggered an emergency SOS."
+            data = {"sos_id": str(sos_id), "lat": lat, "lng": lng, "approximate": approximate}
             await AlertService(session, self.fcm).notify_family(
-                child_id,
-                "sos",
-                "🚨 SOS Alert",
-                f"{child.name} triggered an emergency SOS.",
-                {"sos_id": str(sos_id), "lat": lat, "lng": lng, "approximate": approximate},
-                urgent=True,
+                child_id, "sos", title, body, data, urgent=True
             )
+            # Fan out an urgent push to app-user emergency contacts (Decision D).
+            ec_tokens = await self._emergency_contact_tokens(session, child_id)
+            if ec_tokens:
+                await self.fcm.send(ec_tokens, title, body, {**data, "type": "sos"}, urgent=True)
             await session.commit()
 
         await self.redis.set(rk.sos_active(child_id), "1")  # until resolved (Slice 2)
@@ -124,6 +127,29 @@ class SosAlarmService:
         )
         logger.info("SOS triggered for child %s (sos_id=%s)", child_id, sos_id)
         return sos_id
+
+    async def _emergency_contact_tokens(
+        self, session: AsyncSession, child_id: uuid.UUID
+    ) -> list[str]:
+        """FCM tokens of app-user emergency contacts for this child, EXCLUDING family
+        members (who were already notified via notify_family) so nobody is double-pushed.
+        Matched by phone — robust even if a contact registered after being added."""
+        family_user_ids = select(FamilyMember.user_id).where(
+            FamilyMember.child_id == child_id
+        )
+        rows = (
+            await session.execute(
+                select(User.fcm_token)
+                .join(EmergencyContact, EmergencyContact.phone == User.phone)
+                .where(
+                    EmergencyContact.child_id == child_id,
+                    User.fcm_token.is_not(None),
+                    User.deleted_at.is_(None),
+                    User.id.not_in(family_user_ids),
+                )
+            )
+        ).scalars().all()
+        return list({t for t in rows if t})  # dedup tokens
 
     async def _resolve_location(
         self, child_id: uuid.UUID, lat: float | None, lng: float | None
