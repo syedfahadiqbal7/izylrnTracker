@@ -11,12 +11,15 @@ Two gates on create (and on update when the shape changes):
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Any, Literal
 
+from redis.asyncio import Redis
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import redis_keys as rk
 from app.core.errors import APIException
 from app.core.geometry import is_inside_circle, is_inside_polygon
 from app.models.child import FamilyMember
@@ -34,12 +37,15 @@ _LIMIT_UPGRADE_MSG = {
     "basic": "Upgrade to Premium plan for unlimited zones",
 }
 
+logger = logging.getLogger("izysafe.geofence")
+
 Permission = Literal["view", "manage"]
 
 
 class GeofenceService:
-    def __init__(self, db: AsyncSession) -> None:
+    def __init__(self, db: AsyncSession, redis: Redis) -> None:
         self.db = db
+        self.redis = redis
         self.children = ChildrenService(db)
 
     # ----------------------------------------------------------------- create
@@ -57,6 +63,7 @@ class GeofenceService:
         self.db.add(geofence)
         await self.db.commit()
         await self.db.refresh(geofence)
+        await self._invalidate(child_id)
         return geofence
 
     # ------------------------------------------------------------------- read
@@ -98,15 +105,19 @@ class GeofenceService:
             tier = await self._child_tier(geofence.child_id)
             self._enforce_polygon_gate(geofence.type, tier)
 
+        child_id = geofence.child_id
         await self.db.commit()
         await self.db.refresh(geofence)
+        await self._invalidate(child_id)
         return geofence
 
     # ----------------------------------------------------------------- delete
     async def delete_geofence(self, user, geofence_id: uuid.UUID) -> None:
         geofence, _ = await self._require_geofence(user.id, geofence_id, "manage")
+        child_id = geofence.child_id
         await self.db.delete(geofence)  # hard delete — geofences have no soft-delete
         await self.db.commit()
+        await self._invalidate(child_id)
 
     # --------------------------------------------------------------- geometry
     @staticmethod
@@ -125,6 +136,14 @@ class GeofenceService:
         )
 
     # ---------------------------------------------------------------- helpers
+    async def _invalidate(self, child_id: uuid.UUID) -> None:
+        """Drop the cached active-fence bundle so the breach engine reloads it
+        (Decision E). Redis hiccups must not fail the CRUD request."""
+        try:
+            await self.redis.delete(rk.active_fences(child_id))
+        except Exception:
+            logger.warning("Could not invalidate active-fence cache for child %s", child_id)
+
     async def _child_tier(self, child_id: uuid.UUID) -> str:
         """Effective tier of the child's primary parent (the paying account)."""
         primary = (
