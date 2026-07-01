@@ -65,6 +65,7 @@ class FakeTraccarGateway:
         self.calls: list[dict] = []                   # {traccar_id, data} for send_command
         self.sound_around_calls: list[tuple[int, str]] = []   # (traccar_id, phone)
         self.two_way_calls: list[tuple[int, str]] = []        # (traccar_id, phone)
+        self.text_calls: list[tuple[int, str]] = []           # (traccar_id, text)
 
     async def send_command(
         self, traccar_id: int, data: str, description: str = "IzySafe command"
@@ -79,6 +80,22 @@ class FakeTraccarGateway:
     async def two_way_call(self, traccar_id: int, phone: str) -> bool:
         self.two_way_calls.append((traccar_id, phone))
         return await self.send_command(traccar_id, f"CALLBACK,{phone}#")
+
+    async def send_text(self, traccar_id: int, text: str) -> bool:
+        self.text_calls.append((traccar_id, text))
+        return self.ok
+
+
+class FakeGeocodingGateway:
+    """Stand-in for GeocodingGateway: returns a configurable address (None = no match)."""
+
+    def __init__(self, address: str | None = "12 MG Road, Pune, India") -> None:
+        self.address = address
+        self.calls: list[tuple[float, float]] = []
+
+    async def reverse_geocode(self, lat: float, lng: float) -> str | None:
+        self.calls.append((lat, lng))
+        return self.address
 
 
 class FakeRazorpayGateway:

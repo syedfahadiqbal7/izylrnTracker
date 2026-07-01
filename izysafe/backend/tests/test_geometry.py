@@ -7,7 +7,12 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.geometry import haversine_m, is_inside_circle, is_inside_polygon
+from app.core.geometry import (
+    distance_to_route_m,
+    haversine_m,
+    is_inside_circle,
+    is_inside_polygon,
+)
 from app.models.location import Geofence
 from app.services.geofence_service import GeofenceService
 
@@ -129,3 +134,59 @@ def test_is_point_inside_polygon():
     g = Geofence(type="polygon", polygon_points=SQUARE)
     assert GeofenceService.is_point_inside(g, 0.5, 0.5) is True
     assert GeofenceService.is_point_inside(g, 9.0, 9.0) is False
+
+
+# --------------------------------------------------------------------------- #
+# Route deviation distance (point-to-polyline)
+# --------------------------------------------------------------------------- #
+# A short east-west route along the equator (lng 0 → 0.01 ≈ 1.11 km at lat 0).
+ROUTE = [{"lat": 0.0, "lng": 0.0}, {"lat": 0.0, "lng": 0.01}]
+# An L-shaped route: east along the equator then north.
+L_ROUTE = [
+    {"lat": 0.0, "lng": 0.0},
+    {"lat": 0.0, "lng": 0.01},
+    {"lat": 0.01, "lng": 0.01},
+]
+
+
+def test_route_point_on_line_is_zero():
+    assert distance_to_route_m(0.0, 0.005, ROUTE) == pytest.approx(0.0, abs=1e-3)
+
+
+def test_route_perpendicular_offset():
+    # 0.001° of latitude north of the mid-segment ≈ 111 m perpendicular.
+    d = distance_to_route_m(0.001, 0.005, ROUTE)
+    assert d == pytest.approx(DEG_LAT_M * 0.001, rel=0.01)
+
+
+def test_route_projection_beyond_end_uses_endpoint():
+    # East of B (lng 0.02, past the 0.01 endpoint): nearest point is B itself,
+    # ~1.11 km away — NOT the perpendicular distance (which would be ~0).
+    d = distance_to_route_m(0.0, 0.02, ROUTE)
+    expected = haversine_m(0.0, 0.02, 0.0, 0.01)
+    assert d == pytest.approx(expected, rel=1e-6)
+    assert d > 1_000
+
+
+def test_route_projection_before_start_uses_endpoint():
+    # West of A (lng -0.02): nearest point is A.
+    d = distance_to_route_m(0.0, -0.02, ROUTE)
+    assert d == pytest.approx(haversine_m(0.0, -0.02, 0.0, 0.0), rel=1e-6)
+
+
+def test_route_takes_nearest_of_multiple_segments():
+    # A point near the vertical leg of the L is closer to that segment than to the
+    # horizontal one; distance should reflect the nearer (vertical) leg.
+    d = distance_to_route_m(0.005, 0.011, L_ROUTE)
+    # ~0.001° east of the vertical leg (which sits at lng 0.01) ≈ 111 m.
+    assert d == pytest.approx(DEG_LAT_M * 0.001, rel=0.05)
+
+
+def test_route_too_few_waypoints_raises():
+    with pytest.raises(ValueError, match="at least 2"):
+        distance_to_route_m(0.0, 0.0, [{"lat": 0.0, "lng": 0.0}])
+
+
+def test_route_accepts_lat_lng_tuples():
+    d = distance_to_route_m(0.0, 0.005, [(0.0, 0.0), (0.0, 0.01)])
+    assert d == pytest.approx(0.0, abs=1e-3)

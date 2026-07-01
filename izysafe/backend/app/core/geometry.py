@@ -54,6 +54,66 @@ def _normalize(points: Sequence[PointLike]) -> list[tuple[float, float]]:
     return out
 
 
+def _bearing_rad(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """Initial great-circle bearing from point 1 to point 2, in radians."""
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dlambda = math.radians(lng2 - lng1)
+    y = math.sin(dlambda) * math.cos(phi2)
+    x = math.cos(phi1) * math.sin(phi2) - math.sin(phi1) * math.cos(phi2) * math.cos(dlambda)
+    return math.atan2(y, x)
+
+
+def _point_to_segment_m(
+    plat: float, plng: float,
+    alat: float, alng: float,
+    blat: float, blng: float,
+) -> float:
+    """Shortest great-circle distance (m) from point P to the segment A→B.
+
+    Uses the spherical cross-track distance, clamped to the segment: if P projects
+    beyond an endpoint (the foot of the perpendicular falls off the segment), the
+    distance to the nearer endpoint is returned instead. Accurate to well within GPS
+    noise over the city-scale segments Safe Routes use.
+    """
+    d_ab = haversine_m(alat, alng, blat, blng)
+    if d_ab == 0.0:  # degenerate segment (A == B) → distance to the point
+        return haversine_m(plat, plng, alat, alng)
+
+    d_ap = haversine_m(alat, alng, plat, plng)
+    if d_ap == 0.0:  # P sits on A
+        return 0.0
+
+    dtheta = _bearing_rad(alat, alng, plat, plng) - _bearing_rad(alat, alng, blat, blng)
+    # cos(Δθ) < 0 ⇒ P projects *behind* A ⇒ A is the nearest point.
+    if math.cos(dtheta) < 0:
+        return d_ap
+
+    # Cross-track (perpendicular) and along-track (from A) distances.
+    dxt = math.asin(max(-1.0, min(1.0, math.sin(d_ap / EARTH_RADIUS_M) * math.sin(dtheta)))) * EARTH_RADIUS_M
+    ratio = math.cos(d_ap / EARTH_RADIUS_M) / math.cos(dxt / EARTH_RADIUS_M)
+    dat = math.acos(max(-1.0, min(1.0, ratio))) * EARTH_RADIUS_M
+    if dat > d_ab:  # foot beyond B ⇒ B is the nearest point.
+        return haversine_m(plat, plng, blat, blng)
+    return abs(dxt)
+
+
+def distance_to_route_m(lat: float, lng: float, waypoints: Sequence[PointLike]) -> float:
+    """Minimum distance (m) from (lat, lng) to a polyline of ≥2 ordered waypoints.
+
+    The route is the open path A→B→C…; the returned value is the smallest
+    point-to-segment distance across all consecutive segments. Raises ``ValueError``
+    for a degenerate route (< 2 waypoints). Drives Safe Route deviation detection
+    (F20): deviation = distance > the route's tolerance.
+    """
+    pts = _normalize(waypoints)
+    if len(pts) < 2:
+        raise ValueError("route requires at least 2 waypoints")
+    return min(
+        _point_to_segment_m(lat, lng, a[0], a[1], b[0], b[1])
+        for a, b in zip(pts, pts[1:])
+    )
+
+
 def is_inside_polygon(lat: float, lng: float, polygon_points: Sequence[PointLike]) -> bool:
     """Even-odd ray-casting point-in-polygon test (PNPOLY).
 

@@ -32,6 +32,16 @@ primary parent is Basic+, and "now" is inside the child's school hours:
   1. a school-zone (zone_type='school') ENTER becomes a `school_arrival` alert;
   2. alerts for NON-school zones are suppressed (state still advances).
 `school_absent` detection is deferred to Sprint 6.
+
+Pickup detection (F17, Basic+; Sprint 7) piggybacks on the school-zone EXIT
+transition computed here (Decision D5): when a child leaves a school zone inside the
+dismissal window (school_hours_to −before/+after, in the primary parent's tz, on a
+school day), we record a `pickup_events` row + a `pickup` alert — at most once per
+child per day. It reads the RAW exit transition, independent of the geofence's own
+notify/schedule/debounce gates, and needs school_hours_to set (no separate
+`pickup_enabled` flag — Decision D6). movement_mode is inferred from the fix speed
+(Decision D7): ≥ pickup_vehicle_speed_kmh → in_vehicle, else on_foot (unknown if no
+speed). It does NOT require School Mode to be enabled.
 """
 from __future__ import annotations
 
@@ -39,7 +49,7 @@ import json
 import logging
 import uuid
 from collections.abc import Callable
-from datetime import datetime, time, timezone
+from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from redis.asyncio import Redis
@@ -50,7 +60,7 @@ from app.core import redis_keys as rk
 from app.core.config import settings
 from app.core.geometry import is_inside_circle, is_inside_polygon
 from app.models.child import Child, FamilyMember
-from app.models.location import Geofence, GeofenceEvent
+from app.models.location import Geofence, GeofenceEvent, PickupEvent
 from app.models.user import User
 from app.services.alert_service import AlertService
 from app.services.children_service import effective_tier
@@ -58,8 +68,9 @@ from app.services.fcm_gateway import FcmGateway
 
 logger = logging.getLogger("izysafe.geofence")
 
-# School Mode is a Basic+ feature (CLAUDE.md §10).
+# School Mode is a Basic+ feature (CLAUDE.md §10). Pickup (F17) shares the gate.
 SCHOOL_MODE_TIERS = {"basic", "premium", "school"}
+PICKUP_TIERS = SCHOOL_MODE_TIERS
 
 
 class GeofenceBreachService:
@@ -80,6 +91,7 @@ class GeofenceBreachService:
         lat: float,
         lng: float,
         device_id: uuid.UUID | None = None,
+        speed: float | None = None,
         now: datetime | None = None,
     ) -> None:
         now = now or datetime.now(timezone.utc)
@@ -92,6 +104,7 @@ class GeofenceBreachService:
 
         # (fence, direction, as_school_arrival) tuples that pass every gate.
         to_fire: list[tuple[dict, str, bool]] = []
+        pickup_zone: dict | None = None  # a school zone the child just EXITED (F17)
         for fence in fences:
             try:
                 inside = self._inside(fence, lat, lng)
@@ -109,6 +122,12 @@ class GeofenceBreachService:
                 continue  # baseline or no change
 
             direction = "enter" if inside else "exit"
+            is_school_zone = fence["zone_type"] == "school"
+            # Pickup (F17): capture the RAW school-zone exit transition here, before the
+            # geofence's own notify/schedule/debounce gates — pickup is independent of them.
+            if direction == "exit" and is_school_zone and pickup_zone is None:
+                pickup_zone = fence
+
             if direction == "enter" and not fence["notify_enter"]:
                 continue
             if direction == "exit" and not fence["notify_exit"]:
@@ -116,7 +135,6 @@ class GeofenceBreachService:
             if not self._within_schedule(fence, bundle["tz"], now):
                 continue
 
-            is_school_zone = fence["zone_type"] == "school"
             # School Mode: during school hours, mute non-school zones entirely.
             if school_now and not is_school_zone:
                 continue
@@ -128,6 +146,10 @@ class GeofenceBreachService:
 
         if to_fire:
             await self._fire(child_id, device_id, lat, lng, bundle["child_name"], to_fire)
+        if pickup_zone is not None:
+            await self._maybe_record_pickup(
+                child_id, pickup_zone, lat, lng, speed, bundle, now
+            )
 
     # --------------------------------------------------------------- internals
     @staticmethod
@@ -178,6 +200,98 @@ class GeofenceBreachService:
         if not s["from"] or not s["to"]:
             return False  # hours not configured → nothing to key off
         return self._in_window(s["days"], s["from"], s["to"], bundle["tz"], now)
+
+    # ------------------------------------------------------------- pickup (F17)
+    @staticmethod
+    def _movement_mode(speed: float | None) -> str:
+        """Infer travel mode from the fix speed (Decision D7)."""
+        if speed is None:
+            return "unknown"
+        return "in_vehicle" if speed >= settings.pickup_vehicle_speed_kmh else "on_foot"
+
+    @staticmethod
+    def _pickup_window(
+        school_to: str | None, school_days: list[int], tz_name: str, now: datetime
+    ) -> datetime | None:
+        """If `now` falls in the dismissal window (school_hours_to −before/+after) on a
+        school day, return the local time; else None. Needs school_hours_to set."""
+        if not school_to:
+            return None
+        try:
+            tz = ZoneInfo(tz_name)
+        except (ZoneInfoNotFoundError, ValueError):
+            tz = timezone.utc
+        local = now.astimezone(tz)
+        if school_days and local.isoweekday() not in school_days:
+            return None
+        to_t = time.fromisoformat(school_to)
+        dismissal = local.replace(
+            hour=to_t.hour, minute=to_t.minute, second=0, microsecond=0
+        )
+        start = dismissal - timedelta(minutes=settings.pickup_window_before_min)
+        end = dismissal + timedelta(minutes=settings.pickup_window_after_min)
+        return local if start <= local <= end else None
+
+    async def _maybe_record_pickup(
+        self,
+        child_id: uuid.UUID,
+        zone: dict,
+        lat: float,
+        lng: float,
+        speed: float | None,
+        bundle: dict,
+        now: datetime,
+    ) -> None:
+        """Record a pickup for a school-zone exit inside the dismissal window, at most
+        once per child per day (Basic+; Decisions D5–D8)."""
+        if bundle["tier"] not in PICKUP_TIERS:
+            return
+        s = bundle["school"]
+        local = self._pickup_window(s["to"], s["days"], bundle["tz"], now)
+        if local is None:
+            return
+
+        day = local.strftime("%Y%m%d")
+        dedup_key = rk.pickup_recorded(child_id, day)
+        if await self.redis.get(dedup_key):
+            return  # already recorded a pickup for this child today
+
+        mode = self._movement_mode(speed)
+        async with self.session_factory() as session:
+            session.add(
+                PickupEvent(
+                    child_id=child_id,
+                    geofence_id=uuid.UUID(zone["id"]),
+                    movement_mode=mode,
+                )
+            )
+            alerts = AlertService(session, self.fcm)
+            mode_txt = {"on_foot": "on foot", "in_vehicle": "by vehicle"}.get(
+                mode, "movement unknown"
+            )
+            await alerts.notify_family(
+                child_id,
+                "pickup",
+                f"Pickup from {zone['name']}",
+                f"{bundle['child_name']} left {zone['name']} ({mode_txt}).",
+                {
+                    "geofence_id": zone["id"],
+                    "zone_type": zone["zone_type"],
+                    "movement_mode": mode,
+                    "lat": lat,
+                    "lng": lng,
+                },
+            )
+            await session.commit()
+
+        # Set the daily dedup marker only after a successful record (mirrors debounce
+        # ordering); expire at the next local midnight so the next school day is fresh.
+        midnight = (local + timedelta(days=1)).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        ttl = max(1, int((midnight - local).total_seconds()))
+        await self.redis.set(dedup_key, "1", ex=ttl)
+        logger.info("Pickup recorded for child %s from zone %s (%s)", child_id, zone["id"], mode)
 
     async def _fire(
         self,

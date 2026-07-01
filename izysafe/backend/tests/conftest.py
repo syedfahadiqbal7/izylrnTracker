@@ -19,17 +19,21 @@ from sqlalchemy.pool import NullPool
 
 from app.api.deps import (
     get_battery_service,
+    get_chat_inbound_service,
     get_device_status_service,
     get_fcm_gateway,
+    get_geocoding_gateway,
     get_geofence_breach_service,
     get_invite_gateway,
     get_otp_gateway,
     get_razorpay_gateway,
     get_realtime_gateway,
+    get_route_deviation_service,
     get_sos_alarm_service,
     get_speed_service,
     get_stripe_gateway,
     get_traccar_gateway,
+    get_watch_removed_service,
 )
 from app.core.config import settings
 from app.core.database import get_db
@@ -38,13 +42,17 @@ from app.core.security import create_access_token
 from app.main import app
 from app.models.user import User
 from app.services.battery_service import BatteryService
+from app.services.chat_service import ChatInboundService
 from app.services.device_status import DeviceStatusService
 from app.services.geofence_breach_service import GeofenceBreachService
+from app.services.route_deviation_service import RouteDeviationService
 from app.services.sos_service import SosAlarmService
+from app.services.watch_removed_service import WatchRemovedService
 from app.services.speed_service import SpeedService
 from tests.fakes import (
     FakeFcmGateway,
     FakeGateway,
+    FakeGeocodingGateway,
     FakeInviteGateway,
     FakeRazorpayGateway,
     FakeRealtimeGateway,
@@ -127,6 +135,11 @@ def fake_traccar_gateway() -> FakeTraccarGateway:
 
 
 @pytest.fixture
+def fake_geocoding_gateway() -> FakeGeocodingGateway:
+    return FakeGeocodingGateway()
+
+
+@pytest.fixture
 def fake_razorpay_gateway() -> FakeRazorpayGateway:
     return FakeRazorpayGateway()
 
@@ -140,7 +153,7 @@ def fake_stripe_gateway() -> FakeStripeGateway:
 async def client(
     db_session, redis_client, fake_gateway, fake_invite_gateway,
     fake_realtime_gateway, fake_fcm_gateway, fake_traccar_gateway,
-    fake_razorpay_gateway, fake_stripe_gateway,
+    fake_razorpay_gateway, fake_stripe_gateway, fake_geocoding_gateway,
 ):
     async def _override_db():
         yield db_session
@@ -152,6 +165,7 @@ async def client(
     app.dependency_overrides[get_realtime_gateway] = lambda: fake_realtime_gateway
     app.dependency_overrides[get_fcm_gateway] = lambda: fake_fcm_gateway
     app.dependency_overrides[get_traccar_gateway] = lambda: fake_traccar_gateway
+    app.dependency_overrides[get_geocoding_gateway] = lambda: fake_geocoding_gateway
     app.dependency_overrides[get_razorpay_gateway] = lambda: fake_razorpay_gateway
     app.dependency_overrides[get_stripe_gateway] = lambda: fake_stripe_gateway
     # Services whose work runs in a BackgroundTask (after the request session would
@@ -168,9 +182,18 @@ async def client(
     app.dependency_overrides[get_geofence_breach_service] = lambda: GeofenceBreachService(
         lambda: NonClosingSession(db_session), redis_client, fake_fcm_gateway
     )
+    app.dependency_overrides[get_route_deviation_service] = lambda: RouteDeviationService(
+        lambda: NonClosingSession(db_session), redis_client, fake_fcm_gateway
+    )
     app.dependency_overrides[get_sos_alarm_service] = lambda: SosAlarmService(
         lambda: NonClosingSession(db_session), redis_client,
         fake_realtime_gateway, fake_fcm_gateway,
+    )
+    app.dependency_overrides[get_watch_removed_service] = lambda: WatchRemovedService(
+        lambda: NonClosingSession(db_session), redis_client, fake_fcm_gateway
+    )
+    app.dependency_overrides[get_chat_inbound_service] = lambda: ChatInboundService(
+        lambda: NonClosingSession(db_session), fake_fcm_gateway
     )
 
     transport = ASGITransport(app=app)

@@ -79,3 +79,33 @@ class TraccarGateway:
             settings.traccar_callback_template.format(phone=phone),
             description="IzySafe Two-way Call",
         )
+
+    async def send_text(self, traccar_id: int, text: str) -> bool:
+        """Chat (F23): push a short text to the watch's screen via Traccar's `message`
+        command. Returns True iff Traccar accepts it. Never raises.
+
+        Like the audio commands this is GT06-model-specific and UNVALIDATED end-to-end
+        (docs/HARDWARE_SPIKE.md) — whether the watch actually displays the text can't be
+        observed from the backend. We only record that the command was dispatched."""
+        if not (settings.traccar_api_user and settings.traccar_api_password):
+            logger.warning("Traccar API not configured — cannot text device %s", traccar_id)
+            return False
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(
+                    f"{settings.traccar_url}/api/commands",
+                    auth=(settings.traccar_api_user, settings.traccar_api_password),
+                    json={
+                        "deviceId": traccar_id,
+                        "type": "message",
+                        "description": "IzySafe Chat",
+                        "attributes": {"message": text},
+                    },
+                )
+        except httpx.HTTPError:
+            logger.exception("Traccar text failed for device %s", traccar_id)
+            return False
+        if resp.status_code >= 300:
+            logger.warning("Traccar rejected text for device %s (HTTP %s)", traccar_id, resp.status_code)
+            return False
+        return True

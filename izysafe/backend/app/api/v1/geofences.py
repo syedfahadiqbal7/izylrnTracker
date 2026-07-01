@@ -13,12 +13,13 @@ from fastapi import APIRouter, Depends, Query
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, get_geocoding_gateway
 from app.core.database import get_db
 from app.core.errors import success
 from app.core.redis import get_redis
 from app.models.location import Geofence, GeofenceEvent
 from app.models.user import User
+from app.services.geocoding_gateway import GeocodingGateway
 from app.schemas.geofence import (
     GeofenceCreate,
     GeofenceEventResponse,
@@ -45,12 +46,27 @@ async def create_geofence(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis),
+    geocoder: GeocodingGateway = Depends(get_geocoding_gateway),
 ) -> dict:
-    """Create a zone for a child (requires manage permission + tier headroom)."""
-    geofence = await GeofenceService(db, redis).create_geofence(
+    """Create a zone for a child (requires manage permission + tier headroom). When no
+    address is supplied the circle centre is reverse-geocoded to label it (F24)."""
+    geofence = await GeofenceService(db, redis, geocoder).create_geofence(
         current_user, child_id, payload.model_dump(exclude_unset=True)
     )
     return success(_serialize(geofence))
+
+
+@router.get("/children/{child_id}/safe-addresses")
+async def list_safe_addresses(
+    child_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """List a child's Safe Addresses — non-school named places (F24). A filtered view
+    over the geofences table; create/update/delete reuse the geofence endpoints."""
+    rows = await GeofenceService(db, redis).list_safe_addresses(current_user, child_id)
+    return success([_serialize(g) for g in rows])
 
 
 @router.get("/children/{child_id}/geofences")

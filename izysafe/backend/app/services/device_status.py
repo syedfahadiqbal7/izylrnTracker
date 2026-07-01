@@ -34,6 +34,7 @@ from app.core.config import settings
 from app.models.device import Device
 from app.services.alert_service import AlertService
 from app.services.fcm_gateway import FcmGateway
+from app.services.watch_removed_service import WatchRemovedService
 
 logger = logging.getLogger("izysafe.device_status")
 
@@ -90,6 +91,8 @@ class DeviceStatusMonitor:
         self.fcm = fcm
         self.offline_threshold = offline_threshold
         self.interval = interval
+        # Watch-removed detection reuses this same 60s loop (F18, Decision D14).
+        self.watch_removed = WatchRemovedService(session_factory, redis, fcm)
         self._stop = asyncio.Event()
         self._task: asyncio.Task | None = None
 
@@ -121,6 +124,10 @@ class DeviceStatusMonitor:
                 await self.sweep_once()
             except Exception:  # never let one bad sweep kill the loop
                 logger.exception("Device status sweep failed")
+            try:
+                await self.watch_removed.sweep_once()
+            except Exception:  # isolate: a watch-removed hiccup must not stop offline sweeps
+                logger.exception("Watch-removed sweep failed")
 
     # ----------------------------------------------------------------- sweep
     async def sweep_once(self) -> int:
