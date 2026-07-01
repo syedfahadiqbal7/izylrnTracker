@@ -34,6 +34,7 @@ from app.services.invite_gateway import InviteGateway
 from app.services.otp_gateway import OtpGateway
 from app.services.razorpay_gateway import RazorpayGateway
 from app.services.realtime_gateway import RealtimeGateway
+from app.services.stripe_gateway import StripeGateway
 from app.services.token_service import is_denylisted
 from app.services.traccar_gateway import TraccarGateway
 
@@ -62,6 +63,10 @@ def get_traccar_gateway() -> TraccarGateway:
 
 def get_razorpay_gateway() -> RazorpayGateway:
     return RazorpayGateway()
+
+
+def get_stripe_gateway() -> StripeGateway:
+    return StripeGateway()
 
 
 def get_device_status_service(

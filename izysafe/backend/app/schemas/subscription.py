@@ -22,10 +22,17 @@ class CheckoutRequest(BaseModel):
 
 
 class CheckoutResponse(BaseModel):
+    """Unified across gateways — the app branches on `gateway`.
+
+    Razorpay: `reference_id` = subscription id, `checkout_url` = short_url, `key_id` set
+    (in-app SDK). Stripe: `reference_id` = session id, `checkout_url` = hosted page,
+    `key_id` null.
+    """
+
     gateway: str
-    subscription_id: str
-    short_url: str | None
-    key_id: str
+    reference_id: str
+    checkout_url: str | None
+    key_id: str | None
     status: str | None
 
 

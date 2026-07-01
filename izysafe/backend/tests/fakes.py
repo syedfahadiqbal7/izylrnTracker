@@ -97,6 +97,28 @@ class FakeRazorpayGateway:
         return None if self.fail else self.sub
 
 
+class FakeStripeGateway:
+    """Stand-in for StripeGateway.create_checkout_session. verify_webhook stays the real
+    static (tests exercise the actual HMAC path)."""
+
+    def __init__(self, session: dict | None = None, fail: bool = False) -> None:
+        self.fail = fail
+        self.session = session or {
+            "id": "cs_test_123", "url": "https://checkout.stripe.com/pay/cs_test_123",
+            "status": "open",
+        }
+        self.calls: list[dict] = []
+
+    async def create_checkout_session(
+        self, price_id: str, metadata: dict, success_url: str, cancel_url: str
+    ):
+        self.calls.append({
+            "price_id": price_id, "metadata": metadata,
+            "success_url": success_url, "cancel_url": cancel_url,
+        })
+        return None if self.fail else self.session
+
+
 class FakeFcmGateway:
     """Stand-in for FcmGateway: records multicast sends, returns token count."""
 

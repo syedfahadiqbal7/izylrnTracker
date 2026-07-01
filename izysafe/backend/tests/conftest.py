@@ -28,6 +28,7 @@ from app.api.deps import (
     get_realtime_gateway,
     get_sos_alarm_service,
     get_speed_service,
+    get_stripe_gateway,
     get_traccar_gateway,
 )
 from app.core.config import settings
@@ -47,6 +48,7 @@ from tests.fakes import (
     FakeInviteGateway,
     FakeRazorpayGateway,
     FakeRealtimeGateway,
+    FakeStripeGateway,
     FakeTraccarGateway,
 )
 
@@ -129,11 +131,16 @@ def fake_razorpay_gateway() -> FakeRazorpayGateway:
     return FakeRazorpayGateway()
 
 
+@pytest.fixture
+def fake_stripe_gateway() -> FakeStripeGateway:
+    return FakeStripeGateway()
+
+
 @pytest_asyncio.fixture
 async def client(
     db_session, redis_client, fake_gateway, fake_invite_gateway,
     fake_realtime_gateway, fake_fcm_gateway, fake_traccar_gateway,
-    fake_razorpay_gateway,
+    fake_razorpay_gateway, fake_stripe_gateway,
 ):
     async def _override_db():
         yield db_session
@@ -146,6 +153,7 @@ async def client(
     app.dependency_overrides[get_fcm_gateway] = lambda: fake_fcm_gateway
     app.dependency_overrides[get_traccar_gateway] = lambda: fake_traccar_gateway
     app.dependency_overrides[get_razorpay_gateway] = lambda: fake_razorpay_gateway
+    app.dependency_overrides[get_stripe_gateway] = lambda: fake_stripe_gateway
     # Services whose work runs in a BackgroundTask (after the request session would
     # have closed) are bound to the isolated test session + fake FCM.
     app.dependency_overrides[get_device_status_service] = lambda: DeviceStatusService(

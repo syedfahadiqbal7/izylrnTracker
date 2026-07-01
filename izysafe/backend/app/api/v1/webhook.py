@@ -36,6 +36,7 @@ from app.services.razorpay_gateway import RazorpayGateway
 from app.services.realtime_gateway import RealtimeGateway
 from app.services.sos_service import SosAlarmService
 from app.services.speed_service import MIN_ALERT_SPEED_KMH, SpeedService
+from app.services.stripe_gateway import StripeGateway
 
 router = APIRouter(prefix="/webhook", tags=["webhook"])
 
@@ -132,5 +133,27 @@ async def razorpay_webhook(
     entity = (payload.get("payload") or {}).get("subscription", {}).get("entity") or {}
     disposition = await SubscriptionWebhookService(db, redis, fcm).apply_razorpay(
         payload.get("event", ""), request.headers.get("X-Razorpay-Event-Id"), entity
+    )
+    return {"status": "ok", "disposition": disposition}
+
+
+@router.post("/stripe")
+async def stripe_webhook(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+    fcm: FcmGateway = Depends(get_fcm_gateway),
+) -> dict:
+    """Stripe subscription webhook (Sprint 6). Verifies the `Stripe-Signature` HMAC over
+    the raw body (401 on failure); applies the event inline, idempotent per Stripe event
+    id. A genuine DB error propagates (5xx) so Stripe retries and no activation is lost."""
+    body = await request.body()
+    if not StripeGateway.verify_webhook(body, request.headers.get("Stripe-Signature")):
+        raise APIException(401, "WEBHOOK_UNAUTHORIZED", "Invalid webhook signature")
+
+    payload = json.loads(body)
+    entity = (payload.get("data") or {}).get("object") or {}
+    disposition = await SubscriptionWebhookService(db, redis, fcm).apply_stripe(
+        payload.get("type", ""), payload.get("id"), entity
     )
     return {"status": "ok", "disposition": disposition}

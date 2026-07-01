@@ -94,7 +94,11 @@ class Settings(BaseSettings):
     razorpay_plan_premium: str = ""       # Razorpay recurring Plan ID — Premium
     subscription_total_count: int = 12    # billing cycles before a subscription completes
     stripe_secret_key: str = ""
-    stripe_webhook_secret: str = ""
+    stripe_webhook_secret: str = ""       # signing secret for /webhook/stripe
+    stripe_price_basic: str = ""          # Stripe recurring Price ID — Basic
+    stripe_price_premium: str = ""        # Stripe recurring Price ID — Premium
+    payment_success_url: str = "https://izysafe.app/pay/success"  # Stripe hosted-checkout return
+    payment_cancel_url: str = "https://izysafe.app/pay/cancel"
 
     # ---- Storage: Cloudflare R2 ----
     r2_access_key: str = ""

@@ -8,7 +8,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user, get_razorpay_gateway
+from app.api.deps import get_current_user, get_razorpay_gateway, get_stripe_gateway
 from app.core.database import get_db
 from app.core.errors import success
 from app.models.user import User
@@ -20,6 +20,7 @@ from app.schemas.subscription import (
 )
 from app.services.payment_service import PaymentService
 from app.services.razorpay_gateway import RazorpayGateway
+from app.services.stripe_gateway import StripeGateway
 from app.services.subscription_service import SubscriptionService
 
 router = APIRouter(prefix="/subscriptions", tags=["subscriptions"])
@@ -42,11 +43,12 @@ async def create_checkout(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     razorpay: RazorpayGateway = Depends(get_razorpay_gateway),
+    stripe: StripeGateway = Depends(get_stripe_gateway),
 ) -> dict:
     """Start a recurring subscription for the target tier and return the params the app
-    needs to open the gateway's checkout. The tier is granted only when the gateway
-    webhook confirms payment (never client-reported)."""
-    result = await PaymentService(db, razorpay).create_checkout(current_user, payload.tier)
+    needs to open the gateway's checkout (routed by country). The tier is granted only
+    when the gateway webhook confirms payment (never client-reported)."""
+    result = await PaymentService(db, razorpay, stripe).create_checkout(current_user, payload.tier)
     return success(CheckoutResponse(**result).model_dump(mode="json"))
 
 

@@ -1,15 +1,18 @@
 """Payment orchestration (Sprint 6): checkout routing + gateway-webhook application.
 
 `PaymentService.create_checkout` routes to the gateway for the user's country (Decision A:
-India → Razorpay, UAE → Stripe) and starts a recurring subscription; the tier is NOT
-granted here — only the signature-verified webhook grants it (Decision D).
+India → Razorpay, UAE → Stripe) and starts a recurring subscription, returning a single
+unified checkout shape (`gateway` + `checkout_url` + `reference_id` + `key_id` + `status`)
+so the app branches on `gateway` only. The tier is NOT granted here — only the
+signature-verified webhook grants it (Decision D).
 
-`SubscriptionWebhookService.apply_razorpay` is the single writer of subscription state:
-it resolves the payer from the subscription `notes`, and on activation/renewal upserts the
-local `subscriptions` row + flips `users.subscription_tier`/`subscription_expires_at` to
-the gateway's `current_end`. Cancellation/halt update the row's status only — the user
-keeps access until expiry (the Slice-4 sweep downgrades lapsed users; non-destructive,
-Decision E). Idempotent per webhook event id so gateway retries don't double-fire alerts.
+`SubscriptionWebhookService` is the single writer of subscription state, one `apply_*` per
+gateway. Both resolve the payer from gateway-carried metadata (Razorpay `notes` / Stripe
+`subscription_data.metadata`) and, on activation/renewal, upsert the local `subscriptions`
+row + flip `users.subscription_tier`/`subscription_expires_at` to the gateway's period end.
+Cancellation/halt update the row's status only — the user keeps access until expiry (the
+Slice-4 sweep downgrades; non-destructive, Decision E). Idempotent per webhook event id so
+gateway retries don't double-fire alerts.
 """
 from __future__ import annotations
 
@@ -29,12 +32,13 @@ from app.models.user import Subscription, User
 from app.services.alert_service import AlertService
 from app.services.fcm_gateway import FcmGateway
 from app.services.razorpay_gateway import RazorpayGateway
+from app.services.stripe_gateway import StripeGateway
 
 logger = logging.getLogger("izysafe.payments")
 
 PURCHASABLE_TIERS = {"basic", "premium"}
 GATEWAY_EVENT_TTL = 86_400          # 24h idempotency window for webhook event ids
-_DEFAULT_PERIOD_DAYS = 30           # fallback period when the gateway omits current_end
+_DEFAULT_PERIOD_DAYS = 30           # fallback period when the gateway omits a period end
 
 
 def gateway_for_country(country_code: str | None) -> str:
@@ -46,26 +50,32 @@ def _razorpay_plan_id(tier: str) -> str:
     return {"basic": settings.razorpay_plan_basic, "premium": settings.razorpay_plan_premium}[tier]
 
 
+def _stripe_price_id(tier: str) -> str:
+    return {"basic": settings.stripe_price_basic, "premium": settings.stripe_price_premium}[tier]
+
+
 class PaymentService:
-    def __init__(self, db: AsyncSession, razorpay: RazorpayGateway) -> None:
+    def __init__(
+        self, db: AsyncSession, razorpay: RazorpayGateway, stripe: StripeGateway
+    ) -> None:
         self.db = db
         self.razorpay = razorpay
+        self.stripe = stripe
 
     async def create_checkout(self, user: User, tier: str) -> dict[str, Any]:
-        """Start a recurring subscription with the user's gateway; return the params the
-        app needs to open checkout. Does not grant the tier (webhook does)."""
+        """Start a recurring subscription with the user's gateway; return the unified
+        params the app needs to open checkout. Does not grant the tier (webhook does)."""
         if tier not in PURCHASABLE_TIERS:
             raise APIException(400, "INVALID_PLAN", "That plan can't be purchased")
 
         gateway = gateway_for_country(user.country_code)
-        if gateway != "razorpay":
-            # Stripe (UAE) lands in Slice 3.
-            raise APIException(
-                400, "GATEWAY_UNAVAILABLE", "Card payments for your region are coming soon"
-            )
+        if gateway == "razorpay":
+            return await self._razorpay_checkout(user, tier)
+        return await self._stripe_checkout(user, tier)
+
+    async def _razorpay_checkout(self, user: User, tier: str) -> dict[str, Any]:
         if not _razorpay_plan_id(tier):
             raise APIException(503, "PLAN_NOT_CONFIGURED", "This plan isn't available yet")
-
         sub = await self.razorpay.create_subscription(
             _razorpay_plan_id(tier),
             {"user_id": str(user.id), "tier": tier},
@@ -75,10 +85,29 @@ class PaymentService:
             raise APIException(502, "CHECKOUT_FAILED", "Couldn't start checkout — please try again")
         return {
             "gateway": "razorpay",
-            "subscription_id": sub["id"],
-            "short_url": sub.get("short_url"),
-            "key_id": settings.razorpay_key_id,
+            "reference_id": sub["id"],
+            "checkout_url": sub.get("short_url"),
+            "key_id": settings.razorpay_key_id,   # in-app SDK needs the key
             "status": sub.get("status"),
+        }
+
+    async def _stripe_checkout(self, user: User, tier: str) -> dict[str, Any]:
+        if not _stripe_price_id(tier):
+            raise APIException(503, "PLAN_NOT_CONFIGURED", "This plan isn't available yet")
+        session = await self.stripe.create_checkout_session(
+            _stripe_price_id(tier),
+            {"user_id": str(user.id), "tier": tier},
+            settings.payment_success_url,
+            settings.payment_cancel_url,
+        )
+        if session is None:
+            raise APIException(502, "CHECKOUT_FAILED", "Couldn't start checkout — please try again")
+        return {
+            "gateway": "stripe",
+            "reference_id": session["id"],
+            "checkout_url": session.get("url"),   # hosted checkout page
+            "key_id": None,
+            "status": session.get("status"),
         }
 
 
@@ -119,7 +148,7 @@ class SubscriptionWebhookService:
             expires = _epoch_to_dt(entity.get("current_end")) or (
                 datetime.now(UTC) + timedelta(days=_DEFAULT_PERIOD_DAYS)
             )
-            await self._activate(user, tier, sub_id, expires)
+            await self._activate(user, tier, "razorpay", sub_id, expires)
             disposition = "activated"
         elif event in self.CANCEL_EVENTS:
             await self._mark_status(sub_id, "cancelled")
@@ -133,8 +162,57 @@ class SubscriptionWebhookService:
         await self.db.commit()
         return disposition
 
+    # ---- Stripe -------------------------------------------------------------
+    STRIPE_ACTIVATE_EVENTS = {"customer.subscription.created", "customer.subscription.updated"}
+    STRIPE_DELETE_EVENTS = {"customer.subscription.deleted"}
+    STRIPE_ACTIVE_STATUSES = {"active", "trialing"}
+    STRIPE_PAST_DUE_STATUSES = {"past_due", "unpaid", "incomplete"}
+
+    async def apply_stripe(self, event: str, event_id: str | None, entity: dict[str, Any]) -> str:
+        """Apply one Stripe subscription webhook event (`entity` = the Subscription object).
+        Idempotent per event id. Mirrors apply_razorpay: activation/renewal grant + upsert,
+        cancellation/past-due update status only."""
+        if event_id:
+            first = await self.redis.set(
+                rk.gateway_event("stripe", event_id), "1", nx=True, ex=GATEWAY_EVENT_TTL
+            )
+            if not first:
+                return "duplicate"
+
+        metadata = entity.get("metadata") or {}
+        user_id, tier = metadata.get("user_id"), metadata.get("tier")
+        sub_id = entity.get("id")
+        if not user_id or not tier or not sub_id:
+            return "unresolved"
+        try:
+            user = await self.db.get(User, uuid.UUID(str(user_id)))
+        except ValueError:
+            return "unresolved"
+        if user is None or user.deleted_at is not None:
+            return "unresolved"
+
+        status = entity.get("status")
+        if event in self.STRIPE_ACTIVATE_EVENTS and status in self.STRIPE_ACTIVE_STATUSES:
+            expires = _epoch_to_dt(entity.get("current_period_end")) or (
+                datetime.now(UTC) + timedelta(days=_DEFAULT_PERIOD_DAYS)
+            )
+            await self._activate(user, tier, "stripe", sub_id, expires)
+            disposition = "activated"
+        elif event in self.STRIPE_ACTIVATE_EVENTS and status in self.STRIPE_PAST_DUE_STATUSES:
+            await self._mark_status(sub_id, "past_due")
+            disposition = "past_due"
+        elif event in self.STRIPE_DELETE_EVENTS:
+            await self._mark_status(sub_id, "cancelled")
+            disposition = "cancelled"
+        else:
+            return "ignored"
+
+        await self.db.commit()
+        return disposition
+
+    # ---- shared writers -----------------------------------------------------
     async def _activate(
-        self, user: User, tier: str, sub_id: str, expires: datetime
+        self, user: User, tier: str, gateway: str, sub_id: str, expires: datetime
     ) -> None:
         row = (
             await self.db.execute(
@@ -143,7 +221,7 @@ class SubscriptionWebhookService:
         ).scalar_one_or_none()
         if row is None:
             row = Subscription(
-                user_id=user.id, tier=tier, gateway="razorpay",
+                user_id=user.id, tier=tier, gateway=gateway,
                 gateway_sub_id=sub_id, status="active", expires_at=expires,
             )
             self.db.add(row)
@@ -157,7 +235,7 @@ class SubscriptionWebhookService:
             user.id, "system", "Subscription active",
             f"Your {tier.title()} plan is now active.", data={"kind": "subscription", "tier": tier},
         )
-        logger.info("Razorpay subscription %s active for user %s (%s)", sub_id, user.id, tier)
+        logger.info("%s subscription %s active for user %s (%s)", gateway, sub_id, user.id, tier)
 
     async def _mark_status(self, sub_id: str, status: str) -> None:
         """Update the local row's lifecycle status without touching the user's tier —
@@ -169,7 +247,7 @@ class SubscriptionWebhookService:
         ).scalar_one_or_none()
         if row is not None:
             row.status = status
-            logger.info("Razorpay subscription %s → %s", sub_id, status)
+            logger.info("subscription %s → %s", sub_id, status)
 
 
 def _epoch_to_dt(epoch: int | None) -> datetime | None:

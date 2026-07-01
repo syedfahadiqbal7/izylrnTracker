@@ -44,7 +44,7 @@ async def test_checkout_success(client, db_session, razorpay_configured, fake_ra
     assert resp.status_code == 201, resp.text
     data = resp.json()["data"]
     assert data["gateway"] == "razorpay"
-    assert data["subscription_id"] == "sub_TEST123"
+    assert data["reference_id"] == "sub_TEST123"
     assert data["key_id"] == "rzp_test_key"
     # Gateway called with the right plan + our notes carrying the payer + tier.
     call = fake_razorpay_gateway.calls[0]
@@ -57,13 +57,6 @@ async def test_checkout_invalid_plan(client, db_session, razorpay_configured):
     resp = await client.post(CHECKOUT, headers=headers, json={"tier": "free"})
     assert resp.status_code == 400
     assert resp.json()["code"] == "INVALID_PLAN"
-
-
-async def test_checkout_uae_routes_to_stripe_unavailable(client, db_session, razorpay_configured):
-    _, headers = await _user(db_session, country="+971")
-    resp = await client.post(CHECKOUT, headers=headers, json={"tier": "basic"})
-    assert resp.status_code == 400
-    assert resp.json()["code"] == "GATEWAY_UNAVAILABLE"
 
 
 async def test_checkout_plan_not_configured(client, db_session):
