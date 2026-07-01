@@ -252,6 +252,38 @@ gained `set_sos`/`clear_sos`; `FcmGateway.send` gained an `urgent` (MAX-priority
 
 ---
 
+## 10a. Sprint 5 Status — ✅ COMPLETE (Audio: Sound Around F11 + Two-way Call F12)
+
+Remote audio via **Traccar SIM commands — no media server** (locked §3.12): the backend
+only **gates, issues the command, and logs**; the watch dials the requesting parent over
+its own SIM, so the audio never touches our servers. **+27 tests (286 total).**
+
+| Slice | Delivered | Notes |
+|---|---|---|
+| 1 | `TraccarGateway` + Sound Around | `POST /children/{id}/sound-around` → `MONITOR,<phone>#`; gates can_call → Basic+ (over primary parent) → watch online (Redis) → **3/child/day** (`sound_sessions:{child}`, midnight TTL in the primary parent's tz); logs `audio_sessions` |
+| 2 | Two-way Call | `POST /children/{id}/two-way-call` → `CALLBACK,<phone>#`; same gate stack + a **no-active-call** guard (Redis `call:{child}:active`, 5-min self-expiring); logs `call_records` (`status='initiated'`) |
+
+**Design realities under no-media-server:** the watch dials the **requesting user's**
+phone (the listener = `audio_sessions.user_id` / `call_records.initiated_by`). Command
+outcome (answer / duration / miss) is **not observable** backend-side, so `duration_*`
+stays NULL, `call_records.status` stays `'initiated'`, and the call's "in progress" state
+is a **time-bounded Redis marker** rather than a cleared-on-hang-up flag (no end signal
+exists). Quota / marker / audit row advance **only on a successful dispatch** (a Traccar
+502 leaves them untouched). Command strings are GT06-**model-specific** and live in config
+(`traccar_monitor_template`/`traccar_callback_template`) — true end-to-end delivery is
+validated by the physical-watch spike (`docs/HARDWARE_SPIKE.md` §4), still pending.
+
+**Live-verified vs Traccar:** both `MONITOR` and `CALLBACK` reached Traccar's command API
+(HTTP 200) and persisted to `tc_commands`. **Finding:** `POST /api/commands` requires a
+non-null `description` — for an offline device Traccar queues the command into
+`tc_commands.description` (NOT NULL) and 400s without it; the gateway always sends one.
+
+**New runtime components:** `TraccarGateway` (outbound commands, faked in tests);
+`_AudioFeatureService` shared gate base → `SoundAroundService` + `TwoWayCallService`.
+No schema/migration change — `audio_sessions` + `call_records` already existed (Sprint 0).
+
+---
+
 ## 11. Maintenance
 
 This file is updated at the **end of every sprint**: flip the status table, add any new
