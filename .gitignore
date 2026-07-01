@@ -19,6 +19,10 @@
 **/.ruff_cache/
 **/.mypy_cache/
 
+# Celery beat scheduler state (runtime artifact)
+**/celerybeat-schedule*
+**/celerybeat.pid
+
 # Node / Flutter build artifacts
 **/node_modules/
 **/dist/

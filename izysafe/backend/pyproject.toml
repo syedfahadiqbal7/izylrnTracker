@@ -20,6 +20,7 @@ dependencies = [
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "redis>=5.0",
+    "celery>=5.4",             # scheduled/heavy jobs (Sprint 6): expiry sweep, partitions, purge
     "httpx>=0.27",             # OTP gateway calls (MSG91/Twilio), Traccar client
     "pyjwt>=2.8",              # JWT HS256
     "bcrypt>=4.1",             # OTP + password hashing

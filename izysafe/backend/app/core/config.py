@@ -62,6 +62,12 @@ class Settings(BaseSettings):
     # "in progress" for this bounded window to block concurrent re-dials.
     two_way_call_active_seconds: int = 300                # 5 min in-progress guard per child
 
+    # ---- Scheduled jobs / Celery (Sprint 6) ----
+    celery_broker_url: str = ""                   # falls back to redis_url when empty
+    celery_result_backend: str = ""               # falls back to redis_url when empty
+    soft_delete_retention_days: int = 30          # purge users/children/devices deleted before this
+    partition_lookahead_months: int = 3           # months of locations partitions to keep ahead
+
     # ---- Auth / JWT ----
     jwt_secret: str = "change_me"
     jwt_algorithm: str = "HS256"
