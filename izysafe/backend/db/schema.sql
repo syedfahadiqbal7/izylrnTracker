@@ -202,6 +202,7 @@ CREATE TABLE devices (
                             CHECK (battery_threshold IN (10,15,20,30)),
     watch_removed_threshold_min INTEGER NOT NULL DEFAULT 10
                             CHECK (watch_removed_threshold_min IN (5,10,15)),
+    watch_removed_enabled   BOOLEAN NOT NULL DEFAULT FALSE, -- F18 opt-in switch (Sprint 7, migration 0003)
     -- Cached status (Redis is source of truth for online; these aid cold loads)
     last_battery    INTEGER CHECK (last_battery BETWEEN 0 AND 100),
     last_seen_at    TIMESTAMPTZ,

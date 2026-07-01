@@ -50,6 +50,19 @@ class Settings(BaseSettings):
     # ---- Geofences (Sprint 3) ----
     geofence_debounce_seconds: int = 300          # 5 min anti-jitter debounce per child+fence
 
+    # ---- Safe Routes (Sprint 7, F20) ----
+    route_debounce_seconds: int = 300             # 5 min anti-jitter debounce per child+route
+
+    # ---- Pickup detection (Sprint 7, F17) ----
+    pickup_window_before_min: int = 30            # window opens this long before school_hours_to
+    pickup_window_after_min: int = 90             # window closes this long after school_hours_to
+    pickup_vehicle_speed_kmh: float = 10.0        # ≥ → in_vehicle, < → on_foot
+
+    # ---- Share Links (Sprint 7, F22) ----
+    share_link_default_ttl_hours: int = 1         # default validity when caller omits ttl_hours
+    share_link_base_url: str = "https://izysafe.app/track"  # public track-page base ({base}/{token})
+    share_view_rate_per_min: int = 60             # public GET /share/{token} views per IP per minute
+
     # ---- Audio: Sound Around (F11) / Two-way Call (F12) — Sprint 5 ----
     # Outbound Traccar SIM-command templates (CLAUDE.md §3.12, docs/HARDWARE_SPIKE.md §4).
     # The exact string is GT06-model-specific and UNVALIDATED on hardware — kept in config

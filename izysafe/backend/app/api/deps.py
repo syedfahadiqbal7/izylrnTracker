@@ -26,9 +26,13 @@ from app.core.security import decode_token
 from app.models.user import User
 from app.services.battery_service import BatteryService
 from app.services.device_status import DeviceStatusService
+from app.services.chat_service import ChatInboundService
 from app.services.fcm_gateway import FcmGateway
+from app.services.geocoding_gateway import GeocodingGateway
 from app.services.geofence_breach_service import GeofenceBreachService
+from app.services.route_deviation_service import RouteDeviationService
 from app.services.sos_service import SosAlarmService
+from app.services.watch_removed_service import WatchRemovedService
 from app.services.speed_service import SpeedService
 from app.services.invite_gateway import InviteGateway
 from app.services.otp_gateway import OtpGateway
@@ -59,6 +63,10 @@ def get_fcm_gateway() -> FcmGateway:
 
 def get_traccar_gateway() -> TraccarGateway:
     return TraccarGateway()
+
+
+def get_geocoding_gateway() -> GeocodingGateway:
+    return GeocodingGateway()
 
 
 def get_razorpay_gateway() -> RazorpayGateway:
@@ -99,6 +107,14 @@ def get_geofence_breach_service(
     return GeofenceBreachService(AsyncSessionLocal, redis, fcm)
 
 
+def get_route_deviation_service(
+    redis: Redis = Depends(get_redis),
+    fcm: FcmGateway = Depends(get_fcm_gateway),
+) -> RouteDeviationService:
+    # BackgroundTask → own session factory (the request session is gone by then).
+    return RouteDeviationService(AsyncSessionLocal, redis, fcm)
+
+
 def get_sos_alarm_service(
     redis: Redis = Depends(get_redis),
     realtime: RealtimeGateway = Depends(get_realtime_gateway),
@@ -106,6 +122,21 @@ def get_sos_alarm_service(
 ) -> SosAlarmService:
     # BackgroundTask → own session factory (the request session is gone by then).
     return SosAlarmService(AsyncSessionLocal, redis, realtime, fcm)
+
+
+def get_watch_removed_service(
+    redis: Redis = Depends(get_redis),
+    fcm: FcmGateway = Depends(get_fcm_gateway),
+) -> WatchRemovedService:
+    # BackgroundTask → own session factory (the request session is gone by then).
+    return WatchRemovedService(AsyncSessionLocal, redis, fcm)
+
+
+def get_chat_inbound_service(
+    fcm: FcmGateway = Depends(get_fcm_gateway),
+) -> ChatInboundService:
+    # BackgroundTask → own session factory (the request session is gone by then).
+    return ChatInboundService(AsyncSessionLocal, fcm)
 
 
 async def verify_traccar_secret(

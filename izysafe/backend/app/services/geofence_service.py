@@ -27,10 +27,15 @@ from app.models.location import Geofence, GeofenceEvent
 from app.models.user import User
 from app.schemas.geofence import validate_shape
 from app.services.children_service import ChildrenService, effective_tier
+from app.services.geocoding_gateway import GeocodingGateway
 
 # None = unlimited. Limit is PER CHILD (zones nest under a child).
 GEOFENCE_LIMITS: dict[str, int | None] = {"free": 1, "basic": 5, "premium": None, "school": None}
 POLYGON_TIERS = {"premium", "school"}
+
+# Safe Addresses (F24) are geofences of any zone_type EXCEPT school (school drives
+# School Mode; the rest are named safe places — schema.sql DESIGN NOTE 7).
+SAFE_ADDRESS_ZONE_TYPES = ("home", "tuition", "grandparents", "sports", "other")
 
 _LIMIT_UPGRADE_MSG = {
     "free": "Upgrade to Basic plan to add more zones",
@@ -43,9 +48,12 @@ Permission = Literal["view", "manage"]
 
 
 class GeofenceService:
-    def __init__(self, db: AsyncSession, redis: Redis) -> None:
+    def __init__(
+        self, db: AsyncSession, redis: Redis, geocoder: GeocodingGateway | None = None
+    ) -> None:
         self.db = db
         self.redis = redis
+        self.geocoder = geocoder
         self.children = ChildrenService(db)
 
     # ----------------------------------------------------------------- create
@@ -58,6 +66,20 @@ class GeofenceService:
         tier = await self._child_tier(child_id)
         await self._enforce_zone_limit(child_id, tier)
         self._enforce_polygon_gate(data.get("type", "circle"), tier)
+
+        # Auto-label a Safe Address / zone when no address was typed (F24). Best-effort:
+        # reverse-geocode the circle centre; a null result leaves address unset.
+        if (
+            self.geocoder is not None
+            and not data.get("address")
+            and data.get("type", "circle") == "circle"
+            and data.get("center_lat") is not None
+            and data.get("center_lng") is not None
+        ):
+            data = dict(data)
+            data["address"] = await self.geocoder.reverse_geocode(
+                data["center_lat"], data["center_lng"]
+            )
 
         geofence = Geofence(child_id=child_id, **data)
         self.db.add(geofence)
@@ -73,6 +95,22 @@ class GeofenceService:
             await self.db.execute(
                 select(Geofence)
                 .where(Geofence.child_id == child_id)
+                .order_by(Geofence.created_at)
+            )
+        ).scalars().all()
+        return list(rows)
+
+    async def list_safe_addresses(self, user, child_id: uuid.UUID) -> list[Geofence]:
+        """Safe Addresses (F24): the child's non-school named places — a convenience
+        filtered view over the same geofences table (no separate concept/table)."""
+        await self.children.get_child(user, child_id, require="view")
+        rows = (
+            await self.db.execute(
+                select(Geofence)
+                .where(
+                    Geofence.child_id == child_id,
+                    Geofence.zone_type.in_(SAFE_ADDRESS_ZONE_TYPES),
+                )
                 .order_by(Geofence.created_at)
             )
         ).scalars().all()

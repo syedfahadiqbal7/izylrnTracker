@@ -50,6 +50,10 @@ class Device(Base, UUIDPkMixin, TimestampMixin, UpdatedAtMixin, SoftDeleteMixin)
     watch_removed_threshold_min: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="10"
     )
+    # Watch Removed (F18) opt-in switch; the threshold above is always present.
+    watch_removed_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false"
+    )
     last_battery: Mapped[int | None] = mapped_column(Integer)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     is_online: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
