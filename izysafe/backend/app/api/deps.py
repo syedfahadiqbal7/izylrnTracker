@@ -34,6 +34,7 @@ from app.services.invite_gateway import InviteGateway
 from app.services.otp_gateway import OtpGateway
 from app.services.realtime_gateway import RealtimeGateway
 from app.services.token_service import is_denylisted
+from app.services.traccar_gateway import TraccarGateway
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -52,6 +53,10 @@ def get_realtime_gateway() -> RealtimeGateway:
 
 def get_fcm_gateway() -> FcmGateway:
     return FcmGateway()
+
+
+def get_traccar_gateway() -> TraccarGateway:
+    return TraccarGateway()
 
 
 def get_device_status_service(

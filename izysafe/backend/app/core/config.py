@@ -50,6 +50,18 @@ class Settings(BaseSettings):
     # ---- Geofences (Sprint 3) ----
     geofence_debounce_seconds: int = 300          # 5 min anti-jitter debounce per child+fence
 
+    # ---- Audio: Sound Around (F11) / Two-way Call (F12) — Sprint 5 ----
+    # Outbound Traccar SIM-command templates (CLAUDE.md §3.12, docs/HARDWARE_SPIKE.md §4).
+    # The exact string is GT06-model-specific and UNVALIDATED on hardware — kept in config
+    # so ops can swap it per watch model without a code change. {phone} is the number the
+    # watch dials back (the requesting parent/guardian).
+    traccar_monitor_template: str = "MONITOR,{phone}#"    # Sound Around: silent ambient listen
+    traccar_callback_template: str = "CALLBACK,{phone}#"  # Two-way Call: duplex (Slice 2)
+    sound_around_daily_limit: int = 3                     # Sound Around sessions per child per day
+    # No hang-up signal exists (audio is off-server), so a Two-way Call is considered
+    # "in progress" for this bounded window to block concurrent re-dials.
+    two_way_call_active_seconds: int = 300                # 5 min in-progress guard per child
+
     # ---- Auth / JWT ----
     jwt_secret: str = "change_me"
     jwt_algorithm: str = "HS256"
