@@ -81,6 +81,22 @@ class FakeTraccarGateway:
         return await self.send_command(traccar_id, f"CALLBACK,{phone}#")
 
 
+class FakeRazorpayGateway:
+    """Stand-in for RazorpayGateway.create_subscription. verify_webhook stays the real
+    static (tests exercise the actual HMAC path)."""
+
+    def __init__(self, sub: dict | None = None, fail: bool = False) -> None:
+        self.fail = fail
+        self.sub = sub or {
+            "id": "sub_TEST123", "short_url": "https://rzp.io/i/test", "status": "created",
+        }
+        self.calls: list[dict] = []
+
+    async def create_subscription(self, plan_id: str, notes: dict, total_count: int):
+        self.calls.append({"plan_id": plan_id, "notes": notes, "total_count": total_count})
+        return None if self.fail else self.sub
+
+
 class FakeFcmGateway:
     """Stand-in for FcmGateway: records multicast sends, returns token count."""
 

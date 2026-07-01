@@ -17,6 +17,18 @@ class PlanResponse(BaseModel):
     limits: dict[str, int | None]
 
 
+class CheckoutRequest(BaseModel):
+    tier: str  # 'basic' | 'premium' — validated in the service (business rule → 400)
+
+
+class CheckoutResponse(BaseModel):
+    gateway: str
+    subscription_id: str
+    short_url: str | None
+    key_id: str
+    status: str | None
+
+
 class SubscriptionMeResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

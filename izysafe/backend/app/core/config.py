@@ -89,6 +89,10 @@ class Settings(BaseSettings):
     # ---- Payments (Sprint 6) ----
     razorpay_key_id: str = ""
     razorpay_key_secret: str = ""
+    razorpay_webhook_secret: str = ""     # HMAC-SHA256 secret for /webhook/razorpay
+    razorpay_plan_basic: str = ""         # Razorpay recurring Plan ID (dashboard) — Basic
+    razorpay_plan_premium: str = ""       # Razorpay recurring Plan ID — Premium
+    subscription_total_count: int = 12    # billing cycles before a subscription completes
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
 
