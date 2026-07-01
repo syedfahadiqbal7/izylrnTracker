@@ -107,23 +107,29 @@ services:
   # ==========================================================================
 
   # --- Celery worker + beat (Sprint 6) — broker is the existing Redis ---
-  # celery-worker:
-  #   build: ./backend
-  #   container_name: izysafe-celery-worker
-  #   command: celery -A app.workers.celery_app worker --loglevel=info
-  #   env_file: .env
-  #   depends_on: [redis, postgres]
-  #   volumes: ["./backend:/app", "./backend/secrets:/app/secrets:ro"]
-  #   networks: [izysafe]
-  #
-  # celery-beat:
-  #   build: ./backend
-  #   container_name: izysafe-celery-beat
-  #   command: celery -A app.workers.celery_app beat --loglevel=info
-  #   env_file: .env
-  #   depends_on: [redis, postgres]
-  #   volumes: ["./backend:/app", "./backend/secrets:/app/secrets:ro"]
-  #   networks: [izysafe]
+  celery-worker:
+    build: ./backend
+    container_name: izysafe-celery-worker
+    restart: unless-stopped
+    command: celery -A app.worker.celery_app worker --loglevel=info
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes: ["./backend:/app", "./backend/secrets:/app/secrets:ro"]
+    networks: [izysafe]
+
+  celery-beat:
+    build: ./backend
+    container_name: izysafe-celery-beat
+    restart: unless-stopped
+    command: celery -A app.worker.celery_app beat --loglevel=info
+    env_file: .env
+    depends_on: [celery-worker]
+    volumes: ["./backend:/app", "./backend/secrets:/app/secrets:ro"]
+    networks: [izysafe]
 
   # --- Adminer (optional DB UI) ---
   # adminer:

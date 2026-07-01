@@ -12,6 +12,7 @@ from app.api.v1 import (
     family,
     geofences,
     sos,
+    subscriptions,
     webhook,
 )
 
@@ -24,4 +25,5 @@ api_router.include_router(emergency.router)
 api_router.include_router(family.router)
 api_router.include_router(geofences.router)
 api_router.include_router(sos.router)
+api_router.include_router(subscriptions.router)
 api_router.include_router(webhook.router)

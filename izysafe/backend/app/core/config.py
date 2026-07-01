@@ -62,6 +62,12 @@ class Settings(BaseSettings):
     # "in progress" for this bounded window to block concurrent re-dials.
     two_way_call_active_seconds: int = 300                # 5 min in-progress guard per child
 
+    # ---- Scheduled jobs / Celery (Sprint 6) ----
+    celery_broker_url: str = ""                   # falls back to redis_url when empty
+    celery_result_backend: str = ""               # falls back to redis_url when empty
+    soft_delete_retention_days: int = 30          # purge users/children/devices deleted before this
+    partition_lookahead_months: int = 3           # months of locations partitions to keep ahead
+
     # ---- Auth / JWT ----
     jwt_secret: str = "change_me"
     jwt_algorithm: str = "HS256"
@@ -89,8 +95,16 @@ class Settings(BaseSettings):
     # ---- Payments (Sprint 6) ----
     razorpay_key_id: str = ""
     razorpay_key_secret: str = ""
+    razorpay_webhook_secret: str = ""     # HMAC-SHA256 secret for /webhook/razorpay
+    razorpay_plan_basic: str = ""         # Razorpay recurring Plan ID (dashboard) — Basic
+    razorpay_plan_premium: str = ""       # Razorpay recurring Plan ID — Premium
+    subscription_total_count: int = 12    # billing cycles before a subscription completes
     stripe_secret_key: str = ""
-    stripe_webhook_secret: str = ""
+    stripe_webhook_secret: str = ""       # signing secret for /webhook/stripe
+    stripe_price_basic: str = ""          # Stripe recurring Price ID — Basic
+    stripe_price_premium: str = ""        # Stripe recurring Price ID — Premium
+    payment_success_url: str = "https://izysafe.app/pay/success"  # Stripe hosted-checkout return
+    payment_cancel_url: str = "https://izysafe.app/pay/cancel"
 
     # ---- Storage: Cloudflare R2 ----
     r2_access_key: str = ""

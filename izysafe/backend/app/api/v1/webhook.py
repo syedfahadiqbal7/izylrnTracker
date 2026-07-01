@@ -6,13 +6,16 @@ invalid fixes are acknowledged and dropped, not retried.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+import json
+
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
     get_battery_service,
     get_device_status_service,
+    get_fcm_gateway,
     get_geofence_breach_service,
     get_realtime_gateway,
     get_sos_alarm_service,
@@ -20,15 +23,20 @@ from app.api.deps import (
     verify_traccar_secret,
 )
 from app.core.database import get_db
+from app.core.errors import APIException
 from app.core.redis import get_redis
 from app.schemas.location import TraccarForward
 from app.services.battery_service import BatteryService
 from app.services.device_status import DeviceStatusService
+from app.services.fcm_gateway import FcmGateway
 from app.services.geofence_breach_service import GeofenceBreachService
 from app.services.location_service import LocationService, _coords_valid
+from app.services.payment_service import SubscriptionWebhookService
+from app.services.razorpay_gateway import RazorpayGateway
 from app.services.realtime_gateway import RealtimeGateway
 from app.services.sos_service import SosAlarmService
 from app.services.speed_service import MIN_ALERT_SPEED_KMH, SpeedService
+from app.services.stripe_gateway import StripeGateway
 
 router = APIRouter(prefix="/webhook", tags=["webhook"])
 
@@ -104,3 +112,48 @@ async def traccar_alarm(
 
     background.add_task(sos.trigger_from_alarm, child_id, device_id, lat, lng, pos.address)
     return {"status": "accepted"}
+
+
+@router.post("/razorpay")
+async def razorpay_webhook(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+    fcm: FcmGateway = Depends(get_fcm_gateway),
+) -> dict:
+    """Razorpay subscription webhook (Sprint 6). HMAC-SHA256 verified against the raw
+    body (never JWT); an invalid signature is 401. On a verified event the subscription
+    state is applied inline — idempotent per `X-Razorpay-Event-Id`. A genuine DB error
+    propagates (5xx) so Razorpay retries and no activation is lost."""
+    body = await request.body()
+    if not RazorpayGateway.verify_webhook(body, request.headers.get("X-Razorpay-Signature")):
+        raise APIException(401, "WEBHOOK_UNAUTHORIZED", "Invalid webhook signature")
+
+    payload = json.loads(body)
+    entity = (payload.get("payload") or {}).get("subscription", {}).get("entity") or {}
+    disposition = await SubscriptionWebhookService(db, redis, fcm).apply_razorpay(
+        payload.get("event", ""), request.headers.get("X-Razorpay-Event-Id"), entity
+    )
+    return {"status": "ok", "disposition": disposition}
+
+
+@router.post("/stripe")
+async def stripe_webhook(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+    fcm: FcmGateway = Depends(get_fcm_gateway),
+) -> dict:
+    """Stripe subscription webhook (Sprint 6). Verifies the `Stripe-Signature` HMAC over
+    the raw body (401 on failure); applies the event inline, idempotent per Stripe event
+    id. A genuine DB error propagates (5xx) so Stripe retries and no activation is lost."""
+    body = await request.body()
+    if not StripeGateway.verify_webhook(body, request.headers.get("Stripe-Signature")):
+        raise APIException(401, "WEBHOOK_UNAUTHORIZED", "Invalid webhook signature")
+
+    payload = json.loads(body)
+    entity = (payload.get("data") or {}).get("object") or {}
+    disposition = await SubscriptionWebhookService(db, redis, fcm).apply_stripe(
+        payload.get("type", ""), payload.get("id"), entity
+    )
+    return {"status": "ok", "disposition": disposition}

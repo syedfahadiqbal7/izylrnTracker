@@ -284,6 +284,48 @@ No schema/migration change — `audio_sessions` + `call_records` already existed
 
 ---
 
+## 10b. Sprint 6 Status — ✅ COMPLETE (Payments & Subscriptions + Celery)
+
+Makes the tier system **purchasable + revenue-ready**: dual payment gateways routed by
+country, webhook-driven activation, and the Celery scheduled-job mechanism (CLAUDE.md §4).
+**+58 tests (325 total).**
+
+| Slice | Delivered | Notes |
+|---|---|---|
+| 1 | Subscription core | plan catalog (`app/core/plans.py`, INR/AED by country, features + limits); `GET /subscriptions/plans` (meta.currency), `GET /subscriptions/me` (effective, expiry-aware tier + status). Drift-guard test vs enforcement limits |
+| 2 | Razorpay (India) | `POST /subscriptions/checkout` → recurring subscription (`notes` carry {user_id, tier}); `POST /webhook/razorpay` HMAC-SHA256 verified → activate/renew/cancel |
+| 3 | Stripe (UAE) | subscription-mode Checkout Session (`subscription_data.metadata`); `POST /webhook/stripe` (`Stripe-Signature` HMAC). **Unified checkout shape** across gateways; `PaymentService` routes by `country_code` |
+| 4 | Celery + jobs | worker + beat services; expiry sweep (daily, durable downgrade), partition roll-forward (monthly, idempotent), 30-day soft-delete purge (daily) |
+
+**Payment invariants:** activation is **webhook-driven only** (Decision D) — checkout never
+grants a tier; the signature-verified webhook is the **single writer** of subscription state
+(`SubscriptionWebhookService`, one `apply_*` per gateway sharing a gateway-parametrized
+`_activate`). Both gateways carry `{user_id, tier}` in gateway metadata so the payer resolves
+statelessly (no local pending row). Webhooks are **HMAC-signed** (stronger than Traccar's
+fixed-secret header); **idempotent** per gateway event id (Redis `payevt:{gw}:{id}`); a bad
+signature → 401, a genuine DB error propagates (5xx) so the gateway retries. Downgrade is
+**non-destructive** (Decision E): `effective_tier` treats a lapsed tier as free on read, and
+the daily expiry sweep makes it durable + notifies — existing resources are kept, only new
+over-limit creation is blocked.
+
+**Celery strategy (§4):** in-request checks stay on FastAPI BackgroundTasks and the batch
+writer stays a lifespan loop; only scheduled/heavy jobs run on Celery. Sync task wrappers run
+their async service via `asyncio.run` on a **fresh NullPool engine** (never bind the app
+engine to a throwaway loop). Job logic lives in services (`SubscriptionExpiryService`,
+`PartitionService`, `PurgeService`), unit-tested directly like the other session_factory jobs.
+
+**Live-verified vs running infra:** both webhooks (bad-sig 401 → signed activation flips the
+user tier + writes the row + alert → retry deduped) on real uvicorn/Postgres/Redis; all three
+Celery jobs through the real broker → worker → Postgres. (Outbound *checkout* calls to
+Razorpay/Stripe await real test API keys — the substantive webhook + job surfaces are proven.)
+
+**New runtime components:** `RazorpayGateway`, `StripeGateway`, `PaymentService`,
+`SubscriptionService`, `SubscriptionWebhookService`; `app/worker/` (Celery app + tasks) +
+`celery-worker`/`celery-beat` compose services. No schema/migration change — `subscriptions`
+existed since Sprint 0.
+
+---
+
 ## 11. Maintenance
 
 This file is updated at the **end of every sprint**: flip the status table, add any new

@@ -94,3 +94,9 @@ def call_active(child_id: uuid.UUID | str) -> str:
     """Set while a Two-way Call (F12) is presumed in progress for a child — a bounded
     no-active-call guard (no hang-up signal exists; TTL-expired, Sprint 5)."""
     return f"call:{child_id}:active"
+
+
+def gateway_event(gateway: str, event_id: str) -> str:
+    """Idempotency marker for a processed payment-gateway webhook event (Sprint 6);
+    dedups gateway retries so activation alerts don't double-fire."""
+    return f"payevt:{gateway}:{event_id}"
