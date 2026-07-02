@@ -323,6 +323,46 @@ async def list_audit(
     )
 
 
+@router.get("/audit/export")
+async def export_audit(
+    actor_type: str | None = Query(None),
+    action: str | None = Query(None),
+    entity_type: str | None = Query(None),
+    entity_id: uuid.UUID | None = Query(None),
+    date_from: datetime | None = Query(None, alias="from"),
+    date_to: datetime | None = Query(None, alias="to"),
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """The filtered audit trail as a CSV download (requires role='admin')."""
+    if admin.role != "admin":
+        raise APIException(403, "FORBIDDEN", "This action requires an admin role")
+    rows, _ = await AuditService.query(
+        db, admin.school_id, actor_type=actor_type, action=action, entity_type=entity_type,
+        entity_id=entity_id, date_from=date_from, date_to=date_to, limit=10000, offset=0,
+    )
+    fields = ["created_at", "actor_type", "actor_id", "action", "entity_type", "entity_id", "details"]
+    import json as _json
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fields)
+    writer.writeheader()
+    for r in rows:
+        writer.writerow({
+            "created_at": r.created_at.isoformat(),
+            "actor_type": r.actor_type,
+            "actor_id": str(r.actor_id) if r.actor_id else "",
+            "action": r.action,
+            "entity_type": r.entity_type or "",
+            "entity_id": str(r.entity_id) if r.entity_id else "",
+            "details": _json.dumps(r.details) if r.details else "",
+        })
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="audit_log.csv"'},
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Roster / enrollment (school side)
 # --------------------------------------------------------------------------- #
