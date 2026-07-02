@@ -66,12 +66,32 @@ async def test_driver_crud(client, db_session):
     created = await client.post(f"{BASE}/drivers", headers=hdr, json={"name": "Ravi", "phone": "+919812345678"})
     assert created.status_code == 201, created.text
     did = created.json()["data"]["id"]
+    # New driver: no access code yet, never logged in.
+    assert created.json()["data"]["has_access_code"] is False
+    assert created.json()["data"]["last_login_at"] is None
 
     assert len((await client.get(f"{BASE}/drivers", headers=hdr)).json()["data"]) == 1
     upd = await client.put(f"{BASE}/drivers/{did}", headers=hdr, json={"verified": True, "active": False})
     assert upd.json()["data"]["verified"] is True and upd.json()["data"]["active"] is False
     assert (await client.delete(f"{BASE}/drivers/{did}", headers=hdr)).status_code == 200
     assert len((await client.get(f"{BASE}/drivers", headers=hdr)).json()["data"]) == 0
+
+
+async def test_driver_set_code_flags_has_access_code(client, db_session):
+    _, _, hdr = await _school_admin(db_session)
+    did = (await client.post(f"{BASE}/drivers", headers=hdr, json={"name": "Ravi"})).json()["data"]["id"]
+    resp = await client.post(f"{BASE}/drivers/{did}/set-code", headers=hdr, json={"access_code": "bus123"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["has_access_code"] is True
+
+
+async def test_driver_create_with_access_code(client, db_session):
+    _, _, hdr = await _school_admin(db_session)
+    resp = await client.post(
+        f"{BASE}/drivers", headers=hdr, json={"name": "Sita", "access_code": "route9"}
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["data"]["has_access_code"] is True
 
 
 async def test_driver_requires_admin_auth(client, db_session, auth_headers):

@@ -35,6 +35,8 @@ class DriverResponse(BaseModel):
     phone: str | None = None
     verified: bool
     active: bool
+    has_access_code: bool = False   # derived from password_hash; false ⇒ can't log in yet
+    last_login_at: datetime | None = None
     created_at: datetime
 
 

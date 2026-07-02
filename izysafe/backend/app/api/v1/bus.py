@@ -39,7 +39,12 @@ router = APIRouter(prefix="/schools", tags=["bus"])
 
 
 def _driver(d: Driver) -> dict:
-    return DriverResponse.model_validate(d).model_dump(mode="json")
+    return DriverResponse(
+        id=d.id, school_id=d.school_id, name=d.name, phone=d.phone,
+        verified=d.verified, active=d.active,
+        has_access_code=d.password_hash is not None,
+        last_login_at=d.last_login_at, created_at=d.created_at,
+    ).model_dump(mode="json")
 
 
 def _route(r: BusRoute) -> dict:
