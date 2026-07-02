@@ -20,7 +20,7 @@ from typing import Any
 import jwt
 from redis.asyncio import Redis
 from redis.exceptions import RedisError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import redis_keys as rk
@@ -162,6 +162,28 @@ class SchoolAuthService:
         await self.db.refresh(new_admin)
         return new_admin
 
+    # --------------------------------------------------------- self-service
+    async def change_password(
+        self, admin: SchoolAdmin, current_password: str, new_password: str
+    ) -> None:
+        """Self-service password change for a logged-in admin. Rate-limited per admin;
+        the current password must match (400 otherwise). Shares hashing with reset."""
+        await self._pwchange_rate_limit(admin.id)
+        if not verify_secret(current_password, admin.password_hash):
+            raise APIException(400, "CURRENT_PASSWORD_INCORRECT", "Your current password is incorrect")
+        admin.password_hash = hash_secret(new_password)
+        await self.db.commit()
+        await self._clear_pwchange_rate(admin.id)  # a successful change resets the counter
+        logger.info("Admin %s changed their password", admin.id)
+
+    async def update_profile(self, admin: SchoolAdmin, fields: dict[str, Any]) -> SchoolAdmin:
+        """Update the admin's own non-sensitive fields (currently just `name`)."""
+        if "name" in fields and fields["name"] is not None:
+            admin.name = fields["name"]
+        await self.db.commit()
+        await self.db.refresh(admin)
+        return admin
+
     async def list_admins(self, admin: SchoolAdmin) -> list[SchoolAdmin]:
         rows = (
             await self.db.execute(
@@ -171,6 +193,82 @@ class SchoolAuthService:
             )
         ).scalars().all()
         return list(rows)
+
+    # ----------------------------------------------------- admin management
+    async def manage_update(
+        self, admin: SchoolAdmin, target_id: uuid.UUID, fields: dict[str, Any]
+    ) -> SchoolAdmin:
+        """Update another admin's role/name (admin-only). Demoting the last active admin
+        to staff is blocked (the school must keep one)."""
+        self._require_admin(admin)
+        target = await self._load_target(admin, target_id)
+        new_role = fields.get("role")
+        if new_role == "staff" and target.role == "admin":
+            await self._guard_last_admin(target)
+        if new_role is not None:
+            target.role = new_role
+        if fields.get("name") is not None:
+            target.name = fields["name"]
+        await self.db.commit()
+        await self.db.refresh(target)
+        return target
+
+    async def set_active(
+        self, admin: SchoolAdmin, target_id: uuid.UUID, active: bool
+    ) -> SchoolAdmin:
+        """Deactivate/reactivate another admin (admin-only). Can't deactivate yourself
+        or the last active admin. Deactivation blocks login + existing tokens at once
+        (both filter active)."""
+        self._require_admin(admin)
+        target = await self._load_target(admin, target_id)
+        if not active:
+            if target.id == admin.id:
+                raise APIException(403, "CANNOT_MODIFY_SELF", "You can't deactivate your own account")
+            await self._guard_last_admin(target)
+        target.active = active
+        await self.db.commit()
+        await self.db.refresh(target)
+        return target
+
+    async def delete_admin(self, admin: SchoolAdmin, target_id: uuid.UUID) -> None:
+        """Hard-delete another admin (admin-only). Can't delete yourself or the last
+        active admin."""
+        self._require_admin(admin)
+        target = await self._load_target(admin, target_id)
+        if target.id == admin.id:
+            raise APIException(403, "CANNOT_MODIFY_SELF", "You can't delete your own account")
+        await self._guard_last_admin(target)
+        await self.db.delete(target)
+        await self.db.commit()
+
+    async def _load_target(self, admin: SchoolAdmin, target_id: uuid.UUID) -> SchoolAdmin:
+        target = (
+            await self.db.execute(
+                select(SchoolAdmin).where(
+                    SchoolAdmin.id == target_id, SchoolAdmin.school_id == admin.school_id
+                )
+            )
+        ).scalar_one_or_none()
+        if target is None:
+            raise APIException(404, "ADMIN_NOT_FOUND", "Admin not found")
+        return target
+
+    async def _guard_last_admin(self, target: SchoolAdmin) -> None:
+        """Block an action that would leave the school with zero active admins."""
+        if not (target.role == "admin" and target.active):
+            return  # only an active admin-role account can be "the last one"
+        others = (
+            await self.db.execute(
+                select(func.count()).select_from(SchoolAdmin).where(
+                    SchoolAdmin.school_id == target.school_id,
+                    SchoolAdmin.role == "admin",
+                    SchoolAdmin.active.is_(True),
+                    SchoolAdmin.id != target.id,
+                )
+            )
+        ).scalar_one()
+        if others == 0:
+            raise APIException(422, "LAST_ADMIN", "The school must keep at least one active admin")
 
     # ---------------------------------------------------------------- helpers
     def _issue_tokens(self, admin: SchoolAdmin) -> dict:
@@ -213,6 +311,23 @@ class SchoolAuthService:
     async def _clear_login_fail(self, email: str) -> None:
         try:
             await self.redis.delete(rk.school_login_rate(email))
+        except RedisError:
+            pass
+
+    async def _pwchange_rate_limit(self, admin_id) -> None:
+        try:
+            key = rk.pwchange_rate(admin_id)
+            count = await self.redis.incr(key)
+            if count == 1:
+                await self.redis.expire(key, settings.pwchange_window_seconds)
+        except RedisError:
+            return  # fail-open on the limiter
+        if count > settings.pwchange_max_attempts:
+            raise APIException(429, "TOO_MANY_ATTEMPTS", "Too many attempts — please try again later")
+
+    async def _clear_pwchange_rate(self, admin_id) -> None:
+        try:
+            await self.redis.delete(rk.pwchange_rate(admin_id))
         except RedisError:
             pass
 

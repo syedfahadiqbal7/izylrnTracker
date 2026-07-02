@@ -146,6 +146,27 @@ def school_login_rate(email: str) -> str:
     return f"rate:schoollogin:{email.lower()}"
 
 
+def pwreset_token(token_hash: str) -> str:
+    """Single-use school-admin password-reset token, keyed by its SHA-256 (Sprint 9);
+    value = admin id, self-expiring at the token TTL."""
+    return f"pwreset:{token_hash}"
+
+
+def pwreset_rate_email(email: str) -> str:
+    """Per-email forgot-password request counter (Sprint 9)."""
+    return f"rate:pwreset:{email.lower()}"
+
+
+def pwreset_rate_ip(ip: str) -> str:
+    """Per-IP forgot-password request counter (Sprint 9)."""
+    return f"rate:pwreset:ip:{ip}"
+
+
+def pwchange_rate(admin_id: uuid.UUID | str) -> str:
+    """Per-admin change-password attempt counter (Sprint 9 Slice 2 abuse guard)."""
+    return f"rate:pwchange:{admin_id}"
+
+
 def gateway_event(gateway: str, event_id: str) -> str:
     """Idempotency marker for a processed payment-gateway webhook event (Sprint 6);
     dedups gateway retries so activation alerts don't double-fire."""

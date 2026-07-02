@@ -37,6 +37,15 @@ class SchoolLoginRequest(BaseModel):
     password: str = Field(..., min_length=1, max_length=100)
 
 
+class ForgotPasswordRequest(BaseModel):
+    email: str = Field(..., pattern=_EMAIL_RE, max_length=255)
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=10, max_length=200)
+    new_password: str = Field(..., min_length=8, max_length=100)
+
+
 class TokenPairResponse(BaseModel):
     access_token: str
     refresh_token: str
@@ -51,6 +60,22 @@ class StaffInviteRequest(BaseModel):
     password: str = Field(..., min_length=8, max_length=100)
     name: str | None = Field(None, max_length=100)
     role: AdminRole = "staff"
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(..., min_length=1, max_length=100)
+    new_password: str = Field(..., min_length=8, max_length=100)
+
+
+class SchoolAdminUpdateRequest(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=100)
+
+
+class SchoolAdminManageRequest(BaseModel):
+    """Admin-managing-admin update (role and/or name)."""
+
+    role: AdminRole | None = None
+    name: str | None = Field(None, min_length=1, max_length=100)
 
 
 class SchoolAdminResponse(BaseModel):
