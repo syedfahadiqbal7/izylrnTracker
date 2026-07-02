@@ -24,6 +24,7 @@ from app.schemas.bus import (
     BusDeviceResponse,
     DriverCreate,
     DriverResponse,
+    DriverSetCodeRequest,
     DriverUpdate,
     RouteCreate,
     RouteResponse,
@@ -125,6 +126,18 @@ async def delete_driver(
 ) -> dict:
     await BusService(db).delete_driver(admin, driver_id)
     return success({"success": True})
+
+
+@router.post("/drivers/{driver_id}/set-code")
+async def set_driver_code(
+    driver_id: uuid.UUID,
+    payload: DriverSetCodeRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Set/rotate a driver's login access code (school-admin action)."""
+    driver = await BusService(db).set_driver_code(admin, driver_id, payload.access_code)
+    return success(_driver(driver))
 
 
 # ---------------------------------------------------------------------- routes

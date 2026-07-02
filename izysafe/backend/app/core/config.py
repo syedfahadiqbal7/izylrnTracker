@@ -116,6 +116,10 @@ class Settings(BaseSettings):
     pwchange_max_attempts: int = 5            # change-password attempts per admin per window
     pwchange_window_seconds: int = 900        # 15 min
 
+    # ---- Driver login (Sprint 10 Slice 1) ----
+    driver_login_max_attempts: int = 10       # failed logins per phone per window
+    driver_login_window_seconds: int = 900    # 15 min brute-force window
+
     # ---- OTP (Sprint 1) ----
     msg91_auth_key: str = ""
     msg91_whatsapp_template: str = ""   # MSG91 WhatsApp template/flow id

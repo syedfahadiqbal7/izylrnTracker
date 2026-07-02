@@ -24,6 +24,8 @@ from app.models.school import (
     BusRoute,
     BusRouteStop,
     BusAssignment,
+    BusTrip,
+    BusBoarding,
 )
 
 __all__ = [
@@ -39,5 +41,5 @@ __all__ = [
     "Trip", "CrashEvent",
     "IzyLrnLink", "WearableIntegration", "Translation",
     "School", "SchoolAdmin", "StudentEnrollment", "AttendanceRecord",
-    "Driver", "BusRoute", "BusRouteStop", "BusAssignment",
+    "Driver", "BusRoute", "BusRouteStop", "BusAssignment", "BusTrip", "BusBoarding",
 ]

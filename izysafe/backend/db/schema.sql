@@ -465,7 +465,7 @@ CREATE TABLE alerts (
                     'critical_battery','device_offline','speed','watch_removed',
                     'route_deviation','pickup','school_arrival','school_absent',
                     'crash','anomaly','chat_reply','family_join','system',
-                    'bus_arrival')),  -- 'bus_arrival' added Sprint 8 (migration 0005)
+                    'bus_arrival','bus_boarded')),  -- bus_* added Sprint 8/10 (migrations 0005/0008)
     title       VARCHAR(200),
     body        TEXT,
     data        JSONB,                                -- {geofence_id, device_id, lat, lng, ...}
@@ -652,10 +652,13 @@ CREATE TABLE drivers (
     school_id     UUID NOT NULL REFERENCES schools(id) ON DELETE CASCADE,
     name          VARCHAR(100) NOT NULL,
     phone         VARCHAR(20),
+    password_hash VARCHAR(100),                 -- bcrypt of the admin-set access code (Sprint 10; null ⇒ can't log in)
     verified      BOOLEAN NOT NULL DEFAULT FALSE,
     active        BOOLEAN NOT NULL DEFAULT TRUE,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Phone is the driver login key → unique among non-null phones (Sprint 10, migration 0007).
+CREATE UNIQUE INDEX uq_drivers_phone ON drivers (phone) WHERE phone IS NOT NULL;
 
 CREATE TABLE bus_routes (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -687,6 +690,27 @@ CREATE TABLE bus_assignments (
     stop_id       UUID REFERENCES bus_route_stops(id) ON DELETE SET NULL,
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (route_id, child_id)
+);
+
+-- Driver-run trips + manual pickup confirmations (Sprint 10, migration 0008).
+CREATE TABLE bus_trips (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    route_id    UUID NOT NULL REFERENCES bus_routes(id) ON DELETE CASCADE,
+    driver_id   UUID REFERENCES drivers(id) ON DELETE SET NULL,
+    status      VARCHAR(10) NOT NULL DEFAULT 'active' CHECK (status IN ('active','ended')),
+    started_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    ended_at    TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX uq_bus_trip_active_route ON bus_trips (route_id) WHERE status = 'active';
+CREATE INDEX idx_bus_trips_driver ON bus_trips (driver_id);
+
+CREATE TABLE bus_boardings (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    trip_id     UUID NOT NULL REFERENCES bus_trips(id) ON DELETE CASCADE,
+    child_id    UUID NOT NULL REFERENCES children(id)  ON DELETE CASCADE,
+    stop_id     UUID REFERENCES bus_route_stops(id) ON DELETE SET NULL,
+    boarded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (trip_id, child_id)
 );
 
 -- ============================================================================

@@ -18,6 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIException
+from app.core.security import hash_secret
 from app.models.child import Child
 from app.models.device import Device
 from app.models.school import (
@@ -79,11 +80,35 @@ class BusService:
 
     # ------------------------------------------------------------- drivers
     async def create_driver(self, admin: SchoolAdmin, data: dict[str, Any]) -> Driver:
-        driver = Driver(school_id=admin.school_id, **data)
+        data = dict(data)
+        code = data.pop("access_code", None)  # optional login code → bcrypt hash
+        await self._ensure_phone_free(data.get("phone"))
+        driver = Driver(
+            school_id=admin.school_id,
+            password_hash=hash_secret(code) if code else None,
+            **data,
+        )
         self.db.add(driver)
         await self.db.commit()
         await self.db.refresh(driver)
         return driver
+
+    async def set_driver_code(self, admin: SchoolAdmin, driver_id: uuid.UUID, code: str) -> Driver:
+        """(Re)set a driver's login access code (admin action)."""
+        driver = await self._require(admin, Driver, driver_id, "DRIVER_NOT_FOUND")
+        driver.password_hash = hash_secret(code)
+        await self.db.commit()
+        await self.db.refresh(driver)
+        return driver
+
+    async def _ensure_phone_free(self, phone: str | None) -> None:
+        if not phone:
+            return
+        taken = (
+            await self.db.execute(select(Driver.id).where(Driver.phone == phone))
+        ).first()
+        if taken is not None:
+            raise APIException(409, "DRIVER_PHONE_TAKEN", "A driver with this phone already exists")
 
     async def list_drivers(self, admin: SchoolAdmin) -> list[Driver]:
         return list((
@@ -94,6 +119,9 @@ class BusService:
 
     async def update_driver(self, admin: SchoolAdmin, driver_id: uuid.UUID, fields: dict[str, Any]) -> Driver:
         driver = await self._require(admin, Driver, driver_id, "DRIVER_NOT_FOUND")
+        new_phone = fields.get("phone")
+        if new_phone is not None and new_phone != driver.phone:
+            await self._ensure_phone_free(new_phone)
         for k, v in fields.items():
             setattr(driver, k, v)
         await self.db.commit()
