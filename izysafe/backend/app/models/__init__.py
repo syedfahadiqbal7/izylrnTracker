@@ -27,6 +27,7 @@ from app.models.school import (
     BusTrip,
     BusBoarding,
 )
+from app.models.audit import AuditLog
 
 __all__ = [
     "Base",
@@ -42,4 +43,5 @@ __all__ = [
     "IzyLrnLink", "WearableIntegration", "Translation",
     "School", "SchoolAdmin", "StudentEnrollment", "AttendanceRecord",
     "Driver", "BusRoute", "BusRouteStop", "BusAssignment", "BusTrip", "BusBoarding",
+    "AuditLog",
 ]

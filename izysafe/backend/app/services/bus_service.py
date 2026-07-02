@@ -29,6 +29,7 @@ from app.models.school import (
     SchoolAdmin,
     StudentEnrollment,
 )
+from app.services.audit_service import AuditService
 from app.services.enrollment_service import EnrollmentService
 
 
@@ -89,6 +90,11 @@ class BusService:
             **data,
         )
         self.db.add(driver)
+        await self.db.flush()
+        AuditService.log(self.db, action="driver.create", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="driver", entity_id=driver.id,
+                         details={"name": driver.name, "has_code": driver.password_hash is not None})
         await self.db.commit()
         await self.db.refresh(driver)
         return driver
@@ -97,6 +103,9 @@ class BusService:
         """(Re)set a driver's login access code (admin action)."""
         driver = await self._require(admin, Driver, driver_id, "DRIVER_NOT_FOUND")
         driver.password_hash = hash_secret(code)
+        AuditService.log(self.db, action="driver.set_code", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="driver", entity_id=driver.id)
         await self.db.commit()
         await self.db.refresh(driver)
         return driver

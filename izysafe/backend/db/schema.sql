@@ -65,6 +65,7 @@ CREATE TABLE users (
                             CHECK (subscription_tier IN ('free','basic','premium','school')),
     subscription_expires_at TIMESTAMPTZ,
     fcm_token               TEXT,
+    last_login_at           TIMESTAMPTZ,            -- stamped on OTP verify (Sprint 10)
     -- Notification preferences (User Journey: quiet hours suppress non-SOS alerts)
     quiet_hours_from        TIME,
     quiet_hours_to          TIME,
@@ -615,6 +616,7 @@ CREATE TABLE school_admins (
     role          VARCHAR(20) NOT NULL DEFAULT 'admin'
                   CHECK (role IN ('admin','staff')),
     active        BOOLEAN NOT NULL DEFAULT TRUE,
+    last_login_at TIMESTAMPTZ,                          -- stamped on login (Sprint 10)
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -655,6 +657,7 @@ CREATE TABLE drivers (
     password_hash VARCHAR(100),                 -- bcrypt of the admin-set access code (Sprint 10; null ⇒ can't log in)
     verified      BOOLEAN NOT NULL DEFAULT FALSE,
     active        BOOLEAN NOT NULL DEFAULT TRUE,
+    last_login_at TIMESTAMPTZ,                          -- stamped on driver login (Sprint 10)
     created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 -- Phone is the driver login key → unique among non-null phones (Sprint 10, migration 0007).
@@ -712,6 +715,21 @@ CREATE TABLE bus_boardings (
     boarded_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (trip_id, child_id)
 );
+
+-- School-scoped audit trail of sensitive actions (Sprint 10, migration 0009).
+CREATE TABLE audit_log (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    school_id   UUID REFERENCES schools(id) ON DELETE SET NULL,  -- scopes the school-admin audit query
+    actor_type  VARCHAR(20) NOT NULL,                 -- school_admin | driver | parent | system
+    actor_id    UUID,
+    action      VARCHAR(50) NOT NULL,                 -- dotted, e.g. admin.deactivate
+    entity_type VARCHAR(40),
+    entity_id   UUID,
+    details     JSONB,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_audit_school_time ON audit_log (school_id, created_at DESC);
+CREATE INDEX idx_audit_actor ON audit_log (actor_id);
 
 -- ============================================================================
 -- END OF SCHEMA

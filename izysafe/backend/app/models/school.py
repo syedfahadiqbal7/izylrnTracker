@@ -57,6 +57,7 @@ class SchoolAdmin(Base, UUIDPkMixin, TimestampMixin):
     name: Mapped[str | None] = mapped_column(String(100))
     role: Mapped[str] = mapped_column(String(20), nullable=False, server_default="admin")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class StudentEnrollment(Base, UUIDPkMixin):
@@ -119,6 +120,7 @@ class Driver(Base, UUIDPkMixin, TimestampMixin):
     password_hash: Mapped[str | None] = mapped_column(String(100))
     verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class BusRoute(Base, UUIDPkMixin, TimestampMixin):

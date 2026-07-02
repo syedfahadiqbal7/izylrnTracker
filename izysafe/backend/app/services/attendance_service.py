@@ -36,6 +36,7 @@ from app.core.errors import APIException
 from app.models.child import Child
 from app.models.location import Geofence
 from app.models.school import AttendanceRecord, School, SchoolAdmin, StudentEnrollment
+from app.services.audit_service import AuditService
 
 logger = logging.getLogger("izysafe.attendance")
 
@@ -271,6 +272,10 @@ class AttendanceService:
         else:
             rec.status = status
             rec.marked_manually = True
+        AuditService.log(self.db, action="attendance.manual_override", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="child", entity_id=enrollment.child_id,
+                         details={"date": day.isoformat(), "status": status})
         await self.db.commit()
         await self.db.refresh(rec)
         return rec

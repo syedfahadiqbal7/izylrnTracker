@@ -152,6 +152,7 @@ class DriverProfileResponse(BaseModel):
     phone: str | None = None
     verified: bool
     active: bool
+    last_login_at: datetime | None = None
 
 
 class DriverRouteStop(BaseModel):

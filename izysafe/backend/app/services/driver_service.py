@@ -28,6 +28,7 @@ from app.models.school import (
     BusAssignment, BusBoarding, BusRoute, BusRouteStop, BusTrip, Driver, StudentEnrollment,
 )
 from app.services.alert_service import AlertService
+from app.services.audit_service import AuditService
 from app.services.fcm_gateway import FcmGateway
 from app.services.token_service import denylist, is_denylisted
 
@@ -54,6 +55,10 @@ class DriverAuthService:
             await self._bump_fail(phone)
             raise APIException(401, "INVALID_CREDENTIALS", "Incorrect phone or access code")
         await self._clear_fail(phone)
+        driver.last_login_at = datetime.now(timezone.utc)
+        AuditService.log(self.db, action="driver.login", actor_type="driver",
+                         actor_id=driver.id, school_id=driver.school_id)
+        await self.db.commit()
         return self._issue_tokens(driver)
 
     async def refresh(self, refresh_token: str) -> dict:
@@ -218,6 +223,11 @@ class DriverTripService:
             raise APIException(409, "ROUTE_TRIP_ACTIVE", "This route already has an active trip")
         trip = BusTrip(route_id=route.id, driver_id=driver.id, status="active")
         self.db.add(trip)
+        await self.db.flush()
+        AuditService.log(self.db, action="driver.trip.start", actor_type="driver",
+                         actor_id=driver.id, school_id=driver.school_id,
+                         entity_type="bus_trip", entity_id=trip.id,
+                         details={"route_id": str(route.id)})
         await self.db.commit()
         await self.db.refresh(trip)
         logger.info("Driver %s started trip %s on route %s", driver.id, trip.id, route.id)
@@ -229,6 +239,9 @@ class DriverTripService:
             raise APIException(404, "NO_ACTIVE_TRIP", "You have no active trip")
         trip.status = "ended"
         trip.ended_at = datetime.now(timezone.utc)
+        AuditService.log(self.db, action="driver.trip.end", actor_type="driver",
+                         actor_id=driver.id, school_id=driver.school_id,
+                         entity_type="bus_trip", entity_id=trip.id)
         await self.db.commit()
         await self.db.refresh(trip)
         return trip
@@ -305,6 +318,10 @@ class DriverTripService:
             f"{child.name} has boarded the bus.",
             {"trip_id": str(trip.id), "child_id": str(child_id)},
         )
+        AuditService.log(self.db, action="driver.boarding", actor_type="driver",
+                         actor_id=driver.id, school_id=driver.school_id,
+                         entity_type="child", entity_id=child_id,
+                         details={"trip_id": str(trip.id)})
         await self.db.commit()
         await self.db.refresh(boarding)
         logger.info("Driver %s marked child %s boarded on trip %s", driver.id, child_id, trip.id)

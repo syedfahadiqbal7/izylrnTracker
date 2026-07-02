@@ -33,7 +33,10 @@ from app.core.security import (
     hash_secret,
     verify_secret,
 )
+from datetime import datetime, timezone
+
 from app.models.school import School, SchoolAdmin
+from app.services.audit_service import AuditService
 from app.services.token_service import denylist, is_denylisted
 
 logger = logging.getLogger("izysafe.school")
@@ -91,6 +94,10 @@ class SchoolAuthService:
             raise APIException(401, "INVALID_CREDENTIALS", "Incorrect email or password")
 
         await self._clear_login_fail(email)
+        admin.last_login_at = datetime.now(timezone.utc)
+        AuditService.log(self.db, action="admin.login", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id)
+        await self.db.commit()
         return self._issue_tokens(admin)
 
     async def refresh(self, refresh_token: str) -> dict:
@@ -158,6 +165,11 @@ class SchoolAuthService:
             name=data.get("name"), role=data.get("role", "staff"), active=True,
         )
         self.db.add(new_admin)
+        await self.db.flush()
+        AuditService.log(self.db, action="admin.create", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="school_admin", entity_id=new_admin.id,
+                         details={"email": new_admin.email, "role": new_admin.role})
         await self.db.commit()
         await self.db.refresh(new_admin)
         return new_admin
@@ -172,6 +184,9 @@ class SchoolAuthService:
         if not verify_secret(current_password, admin.password_hash):
             raise APIException(400, "CURRENT_PASSWORD_INCORRECT", "Your current password is incorrect")
         admin.password_hash = hash_secret(new_password)
+        AuditService.log(self.db, action="admin.password_change", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="school_admin", entity_id=admin.id)
         await self.db.commit()
         await self._clear_pwchange_rate(admin.id)  # a successful change resets the counter
         logger.info("Admin %s changed their password", admin.id)
@@ -209,6 +224,10 @@ class SchoolAuthService:
             target.role = new_role
         if fields.get("name") is not None:
             target.name = fields["name"]
+        AuditService.log(self.db, action="admin.role_update", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="school_admin", entity_id=target.id,
+                         details={"role": target.role})
         await self.db.commit()
         await self.db.refresh(target)
         return target
@@ -226,6 +245,11 @@ class SchoolAuthService:
                 raise APIException(403, "CANNOT_MODIFY_SELF", "You can't deactivate your own account")
             await self._guard_last_admin(target)
         target.active = active
+        AuditService.log(
+            self.db, action="admin.reactivate" if active else "admin.deactivate",
+            actor_type="school_admin", actor_id=admin.id, school_id=admin.school_id,
+            entity_type="school_admin", entity_id=target.id,
+        )
         await self.db.commit()
         await self.db.refresh(target)
         return target
@@ -238,6 +262,10 @@ class SchoolAuthService:
         if target.id == admin.id:
             raise APIException(403, "CANNOT_MODIFY_SELF", "You can't delete your own account")
         await self._guard_last_admin(target)
+        AuditService.log(self.db, action="admin.delete", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="school_admin", entity_id=target.id,
+                         details={"email": target.email})
         await self.db.delete(target)
         await self.db.commit()
 
@@ -352,6 +380,10 @@ class SchoolService:
         school = await self.get_school(admin)
         for key, value in fields.items():
             setattr(school, key, value)
+        AuditService.log(self.db, action="school.config_update", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="school", entity_id=school.id,
+                         details={"fields": sorted(fields.keys())})
         await self.db.commit()
         await self.db.refresh(school)
         return school

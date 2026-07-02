@@ -87,6 +87,7 @@ class SchoolAdminResponse(BaseModel):
     name: str | None = None
     role: str
     active: bool
+    last_login_at: datetime | None = None
     created_at: datetime
 
 
@@ -202,3 +203,20 @@ class DailyRegisterRow(BaseModel):
 class ManualAttendanceRequest(BaseModel):
     date: _date
     status: AttendanceStatus
+
+
+# --------------------------------------------------------------------------- #
+# Audit log (Slice 2)
+# --------------------------------------------------------------------------- #
+class AuditLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    school_id: uuid.UUID | None = None
+    actor_type: str
+    actor_id: uuid.UUID | None = None
+    action: str
+    entity_type: str | None = None
+    entity_id: uuid.UUID | None = None
+    details: dict | None = None
+    created_at: datetime

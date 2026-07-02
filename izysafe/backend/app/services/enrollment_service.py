@@ -27,6 +27,7 @@ from app.core.validators import validate_phone
 from app.models.child import Child, FamilyMember
 from app.models.school import School, SchoolAdmin, StudentEnrollment
 from app.models.user import User
+from app.services.audit_service import AuditService
 from app.services.children_service import ChildrenService
 
 logger = logging.getLogger("izysafe.enrollment")
@@ -59,6 +60,11 @@ class EnrollmentService:
             class_grade=data.get("class_grade"), parent_opt_in=False, bus_opt_in=False,
         )
         self.db.add(enrollment)
+        await self.db.flush()
+        AuditService.log(self.db, action="enrollment.create", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="enrollment", entity_id=enrollment.id,
+                         details={"child_id": str(child.id), "class_grade": enrollment.class_grade})
         await self.db.commit()
         await self.db.refresh(enrollment)
         logger.info("School %s enrolled child %s (pending consent)", admin.school_id, child.id)
@@ -93,6 +99,10 @@ class EnrollmentService:
 
     async def remove(self, admin: SchoolAdmin, enrollment_id: uuid.UUID) -> None:
         enrollment = await self._require_own(admin, enrollment_id)
+        AuditService.log(self.db, action="enrollment.remove", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="enrollment", entity_id=enrollment.id,
+                         details={"child_id": str(enrollment.child_id)})
         await self.db.delete(enrollment)
         await self.db.commit()
 
@@ -145,6 +155,12 @@ class EnrollmentService:
 
         if "parent_opt_in" in fields and fields["parent_opt_in"] is not None:
             enrollment.parent_opt_in = fields["parent_opt_in"]
+            AuditService.log(
+                self.db,
+                action="enrollment.opt_in" if fields["parent_opt_in"] else "enrollment.opt_out",
+                actor_type="parent", actor_id=user.id, school_id=enrollment.school_id,
+                entity_type="enrollment", entity_id=enrollment.id,
+            )
         if "bus_opt_in" in fields and fields["bus_opt_in"] is not None:
             enrollment.bus_opt_in = fields["bus_opt_in"]
         await self.db.commit()

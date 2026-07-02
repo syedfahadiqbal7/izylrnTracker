@@ -28,6 +28,7 @@ from app.core.config import settings
 from app.core.errors import APIException
 from app.core.security import hash_secret
 from app.models.school import SchoolAdmin
+from app.services.audit_service import AuditService
 from app.services.email_gateway import EmailGateway
 
 logger = logging.getLogger("izysafe.pwreset")
@@ -102,6 +103,9 @@ class PasswordResetService:
             raise APIException(400, "INVALID_RESET_TOKEN", "This reset link is invalid or has expired")
 
         admin.password_hash = hash_secret(new_password)
+        AuditService.log(self.db, action="admin.password_reset", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="school_admin", entity_id=admin.id)
         await self.db.commit()
         logger.info("Password reset completed for admin %s", admin.id)
 
