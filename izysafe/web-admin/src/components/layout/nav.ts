@@ -2,6 +2,7 @@ import {
   ClipboardCheck,
   FileBarChart,
   LayoutDashboard,
+  MapPin,
   ScrollText,
   Settings,
   Truck,
@@ -21,6 +22,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { label: "Dashboard", to: "/", icon: LayoutDashboard, end: true },
+  { label: "Live Tracking", to: "/tracking", icon: MapPin },
   { label: "Attendance", to: "/attendance", icon: ClipboardCheck },
   { label: "Reports", to: "/reports", icon: FileBarChart },
   { label: "Roster", to: "/roster", icon: Users },

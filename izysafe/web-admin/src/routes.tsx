@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { ProtectedRoute } from "@/auth/ProtectedRoute";
 import { LoginPage } from "@/pages/LoginPage";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { TrackingPage } from "@/pages/TrackingPage";
 import { AttendancePage } from "@/pages/AttendancePage";
 import { ReportsPage } from "@/pages/ReportsPage";
 import { RosterPage } from "@/pages/RosterPage";
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
         element: <AppLayout />,
         children: [
           { index: true, element: <DashboardPage /> },
+          { path: "tracking", element: <TrackingPage /> },
           { path: "attendance", element: <AttendancePage /> },
           { path: "reports", element: <ReportsPage /> },
           { path: "roster", element: <RosterPage /> },
