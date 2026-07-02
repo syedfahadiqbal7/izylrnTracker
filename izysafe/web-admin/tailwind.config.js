@@ -9,7 +9,26 @@ export default {
       screens: { "2xl": "1400px" },
     },
     extend: {
+      fontFamily: {
+        sans: [
+          "Inter",
+          "ui-sans-serif",
+          "system-ui",
+          "-apple-system",
+          "Segoe UI",
+          "Roboto",
+          "Helvetica Neue",
+          "Arial",
+          "sans-serif",
+        ],
+      },
       colors: {
+        brand: {
+          violet: "hsl(var(--brand-violet))",
+          indigo: "hsl(var(--brand-indigo))",
+          cyan: "hsl(var(--brand-cyan))",
+          magenta: "hsl(var(--brand-magenta))",
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { ShieldCheck } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
 import { ApiClientError } from "@/types/api";
 import { Button } from "@/components/ui/button";
@@ -52,14 +51,24 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="space-y-2 text-center">
-          <div className="mx-auto flex size-11 items-center justify-center rounded-lg bg-primary/10">
-            <ShieldCheck className="size-6 text-primary" />
-          </div>
-          <CardTitle className="text-xl">IzySafe School Admin</CardTitle>
-          <CardDescription>Sign in to your school dashboard</CardDescription>
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-muted/40 p-4">
+      {/* Brand gradient wash */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-64 bg-brand-gradient opacity-90" />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-transparent to-background" />
+
+      <Card className="relative w-full max-w-sm shadow-xl">
+        <CardHeader className="space-y-3 text-center">
+          <img
+            src="/izylrn-icon.png"
+            alt="izyLrn"
+            className="mx-auto size-14 object-contain"
+          />
+          <CardTitle className="text-2xl font-extrabold tracking-tight">
+            izy<span className="text-brand-gradient">Lrn</span>
+          </CardTitle>
+          <CardDescription>
+            School Admin — sign in to your dashboard
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">

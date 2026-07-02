@@ -4,33 +4,41 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* izyLrn brand — indigo-blue primary (#2C56EE), cyan/teal accent (#16AFF0),
+       violet/magenta highlights, sampled from the izyLrn brain logo. */
+    --background: 220 33% 98%;
+    --foreground: 233 33% 14%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 233 33% 14%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --popover-foreground: 233 33% 14%;
+    --primary: 227 84% 55%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 226 40% 96%;
+    --secondary-foreground: 233 30% 20%;
+    --muted: 226 33% 96%;
+    --muted-foreground: 230 12% 46%;
+    --accent: 226 40% 96%;
+    --accent-foreground: 233 30% 20%;
+    --destructive: 349 78% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 226 24% 90%;
+    --input: 226 24% 90%;
+    --ring: 227 84% 55%;
+    --radius: 0.6rem;
 
-    /* Sidebar (dark slate) */
-    --sidebar: 222.2 47.4% 11.2%;
-    --sidebar-foreground: 210 40% 96.1%;
-    --sidebar-accent: 217.2 32.6% 17.5%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 17.5%;
+    /* Brand tokens (from the logo gradient) */
+    --brand-violet: 265 96% 46%; /* #6609E3 */
+    --brand-indigo: 227 84% 55%; /* #2C56EE */
+    --brand-cyan: 198 88% 51%; /* #16AFF0 */
+    --brand-magenta: 296 98% 49%; /* #E702F9 */
+
+    /* Sidebar (deep brand indigo) */
+    --sidebar: 245 46% 13%;
+    --sidebar-foreground: 226 40% 92%;
+    --sidebar-accent: 245 44% 21%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 245 38% 20%;
   }
 
   .dark {
@@ -63,5 +71,28 @@
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  /* izyLrn logo gradient: violet → indigo → cyan */
+  .bg-brand-gradient {
+    background-image: linear-gradient(
+      135deg,
+      hsl(var(--brand-violet)),
+      hsl(var(--brand-indigo)) 55%,
+      hsl(var(--brand-cyan))
+    );
+  }
+  .text-brand-gradient {
+    background-image: linear-gradient(
+      120deg,
+      hsl(var(--brand-violet)),
+      hsl(var(--brand-indigo)) 50%,
+      hsl(var(--brand-cyan))
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
   }
 }
