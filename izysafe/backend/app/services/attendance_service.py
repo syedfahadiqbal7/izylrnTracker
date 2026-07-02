@@ -46,11 +46,15 @@ _PRESENT = ("on_time", "late", "early")
 _STATUSES = ("on_time", "late", "absent", "early", "unknown")
 
 
-def _local(now: datetime, tz_name: str) -> datetime:
+def _zone(tz_name: str) -> ZoneInfo:
     try:
-        return now.astimezone(ZoneInfo(tz_name))
+        return ZoneInfo(tz_name)
     except (ZoneInfoNotFoundError, ValueError):
-        return now.astimezone(UTC)
+        return ZoneInfo("UTC")
+
+
+def _local(now: datetime, tz_name: str) -> datetime:
+    return now.astimezone(_zone(tz_name))
 
 
 def _classify(t: time, school: School) -> str:
@@ -235,7 +239,8 @@ class AttendanceService:
         ).all()
         return [
             {
-                "child_id": e.child_id, "child_name": c.name, "class_grade": e.class_grade,
+                "enrollment_id": e.id, "child_id": e.child_id, "child_name": c.name,
+                "class_grade": e.class_grade,
                 "status": r.status if r else "unknown",
                 "arrival_time": r.arrival_time if r else None,
                 "departure_time": r.departure_time if r else None,
@@ -377,7 +382,8 @@ class AttendanceService:
         return list(rows)
 
     async def set_manual(
-        self, admin: SchoolAdmin, enrollment_id: uuid.UUID, day: date, status: str
+        self, admin: SchoolAdmin, enrollment_id: uuid.UUID, day: date, status: str,
+        arrival_time: time | None = None,
     ) -> AttendanceRecord:
         enrollment = await self._require_enrollment(admin, enrollment_id)
         rec = await AttendanceEngine._get(self.db, admin.school_id, enrollment.child_id, day)
@@ -390,10 +396,18 @@ class AttendanceService:
         else:
             rec.status = status
             rec.marked_manually = True
+        if arrival_time is not None:
+            # Interpret the given time-of-day in the school's timezone, store UTC.
+            school = (
+                await self.db.execute(select(School).where(School.id == admin.school_id))
+            ).scalar_one()
+            local = datetime.combine(day, arrival_time, tzinfo=_zone(school.timezone))
+            rec.arrival_time = local.astimezone(UTC)
         AuditService.log(self.db, action="attendance.manual_override", actor_type="school_admin",
                          actor_id=admin.id, school_id=admin.school_id,
                          entity_type="child", entity_id=enrollment.child_id,
-                         details={"date": day.isoformat(), "status": status})
+                         details={"date": day.isoformat(), "status": status,
+                                  "arrival_time": arrival_time.isoformat() if arrival_time else None})
         await self.db.commit()
         await self.db.refresh(rec)
         return rec

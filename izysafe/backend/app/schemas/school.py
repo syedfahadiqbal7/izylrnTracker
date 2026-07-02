@@ -192,6 +192,7 @@ class AttendanceRecordResponse(BaseModel):
 
 
 class DailyRegisterRow(BaseModel):
+    enrollment_id: uuid.UUID
     child_id: uuid.UUID
     child_name: str
     class_grade: str | None = None
@@ -203,6 +204,9 @@ class DailyRegisterRow(BaseModel):
 class ManualAttendanceRequest(BaseModel):
     date: _date
     status: AttendanceStatus
+    # Optional local (school-timezone) arrival time-of-day to stamp alongside the
+    # status; the service localizes date+time to the school tz then stores UTC.
+    arrival_time: time | None = None
 
 
 class AttendanceReportSummary(BaseModel):

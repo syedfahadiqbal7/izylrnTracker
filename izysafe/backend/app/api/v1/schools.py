@@ -450,5 +450,7 @@ async def set_manual_attendance(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Manually set/override a student's attendance status for a date."""
-    rec = await AttendanceService(db).set_manual(admin, enrollment_id, payload.date, payload.status)
+    rec = await AttendanceService(db).set_manual(
+        admin, enrollment_id, payload.date, payload.status, payload.arrival_time
+    )
     return success(AttendanceRecordResponse.model_validate(rec).model_dump(mode="json"))
