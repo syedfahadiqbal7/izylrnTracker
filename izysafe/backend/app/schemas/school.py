@@ -1,0 +1,179 @@
+"""Pydantic schemas for the School / B2B backend (Sprint 8 Slice 1).
+
+School admins authenticate by email + password (bcrypt), separate from parent OTP
+(CLAUDE.md §7). Email is validated with a lightweight regex (no email-validator dep);
+passwords are min-8. Time fields (school hours) are plain `time` (HH:MM[:SS]).
+"""
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, time
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+_EMAIL_RE = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+
+AdminRole = Literal["admin", "staff"]
+
+
+# --------------------------------------------------------------------------- #
+# Bootstrap (env-gated seed)
+# --------------------------------------------------------------------------- #
+class SchoolSeedRequest(BaseModel):
+    secret: str                                   # must match settings.school_seed_secret
+    school_name: str = Field(..., min_length=1, max_length=200)
+    timezone: str = Field("Asia/Kolkata", max_length=64)
+    admin_email: str = Field(..., pattern=_EMAIL_RE, max_length=255)
+    admin_password: str = Field(..., min_length=8, max_length=100)
+    admin_name: str | None = Field(None, max_length=100)
+
+
+# --------------------------------------------------------------------------- #
+# Auth
+# --------------------------------------------------------------------------- #
+class SchoolLoginRequest(BaseModel):
+    email: str = Field(..., pattern=_EMAIL_RE, max_length=255)
+    password: str = Field(..., min_length=1, max_length=100)
+
+
+class TokenPairResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+
+
+# --------------------------------------------------------------------------- #
+# Admin management
+# --------------------------------------------------------------------------- #
+class StaffInviteRequest(BaseModel):
+    email: str = Field(..., pattern=_EMAIL_RE, max_length=255)
+    password: str = Field(..., min_length=8, max_length=100)
+    name: str | None = Field(None, max_length=100)
+    role: AdminRole = "staff"
+
+
+class SchoolAdminResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    school_id: uuid.UUID
+    email: str
+    name: str | None = None
+    role: str
+    active: bool
+    created_at: datetime
+
+
+# --------------------------------------------------------------------------- #
+# School profile / config
+# --------------------------------------------------------------------------- #
+class SchoolResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str
+    timezone: str
+    holidays: list | None = None
+    on_time_before: time
+    late_until: time
+    arrival_window_from: time
+    created_at: datetime
+    updated_at: datetime
+
+
+class SchoolUpdateRequest(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=200)
+    timezone: str | None = Field(None, max_length=64)
+    holidays: list[str] | None = None            # ["2026-08-15", ...] ISO dates
+    on_time_before: time | None = None
+    late_until: time | None = None
+    arrival_window_from: time | None = None
+
+    @field_validator("holidays")
+    @classmethod
+    def _iso_dates(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return v
+        from datetime import date
+        for d in v:
+            date.fromisoformat(d)  # raises ValueError → 422 if malformed
+        return v
+
+
+# --------------------------------------------------------------------------- #
+# Enrollment (Slice 2) — school-initiated, parent-consented
+# --------------------------------------------------------------------------- #
+class EnrollStudentRequest(BaseModel):
+    phone: str = Field(..., max_length=20)       # the parent's registered phone
+    child_name: str | None = Field(None, max_length=100)  # required if the parent has >1 child
+    class_grade: str | None = Field(None, max_length=50)
+
+
+class EnrollmentResponse(BaseModel):
+    """School-facing roster row."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    school_id: uuid.UUID
+    child_id: uuid.UUID
+    child_name: str
+    class_grade: str | None = None
+    parent_opt_in: bool
+    bus_opt_in: bool
+    enrolled_at: datetime
+
+
+class ParentEnrollmentResponse(BaseModel):
+    """Parent-facing view of a school's enrollment request/consent."""
+
+    id: uuid.UUID
+    school_id: uuid.UUID
+    school_name: str
+    child_id: uuid.UUID
+    child_name: str
+    class_grade: str | None = None
+    parent_opt_in: bool
+    bus_opt_in: bool
+    enrolled_at: datetime
+
+
+class EnrollmentConsentRequest(BaseModel):
+    parent_opt_in: bool | None = None            # approve (True) / withdraw (False)
+    bus_opt_in: bool | None = None               # separate bus-tracking consent
+
+
+# --------------------------------------------------------------------------- #
+# Attendance (Slice 3)
+# --------------------------------------------------------------------------- #
+from datetime import date as _date  # noqa: E402
+
+AttendanceStatus = Literal["on_time", "late", "absent", "unknown", "early"]
+
+
+class AttendanceRecordResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    child_id: uuid.UUID
+    date: _date
+    arrival_time: datetime | None = None
+    departure_time: datetime | None = None
+    status: str
+    total_hours: float | None = None
+    marked_manually: bool
+
+
+class DailyRegisterRow(BaseModel):
+    child_id: uuid.UUID
+    child_name: str
+    class_grade: str | None = None
+    status: str
+    arrival_time: datetime | None = None
+    departure_time: datetime | None = None
+
+
+class ManualAttendanceRequest(BaseModel):
+    date: _date
+    status: AttendanceStatus

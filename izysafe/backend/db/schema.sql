@@ -187,10 +187,11 @@ CREATE INDEX idx_invites_token ON invites (token);
 -- ============================================================================
 CREATE TABLE devices (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    child_id        UUID NOT NULL REFERENCES children(id) ON DELETE CASCADE,
+    child_id        UUID REFERENCES children(id) ON DELETE CASCADE, -- nullable since Sprint 8 (bus devices have none)
+    school_id       UUID,   -- bus devices belong to a school; FK → schools(id) added in migration 0006 (schools defined later)
     name            VARCHAR(100) NOT NULL,                 -- "Aryan's Watch"
     device_type     VARCHAR(20)  NOT NULL DEFAULT 'watch'
-                    CHECK (device_type IN ('watch','bag_tracker','phone')),
+                    CHECK (device_type IN ('watch','bag_tracker','phone','bus')), -- 'bus' added Sprint 8 (migration 0005)
     imei            VARCHAR(20) UNIQUE NOT NULL,
     traccar_id      INTEGER,                               -- Traccar device id
     model           VARCHAR(100),
@@ -210,7 +211,12 @@ CREATE TABLE devices (
     active          BOOLEAN NOT NULL DEFAULT TRUE,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    deleted_at      TIMESTAMPTZ                             -- soft delete
+    deleted_at      TIMESTAMPTZ,                            -- soft delete
+    -- A bus tracker has a school + no child; every other device has a child + no school (Sprint 8, migration 0006).
+    CONSTRAINT ck_device_owner CHECK (
+        (device_type = 'bus'  AND child_id IS NULL     AND school_id IS NOT NULL)
+        OR (device_type <> 'bus' AND child_id IS NOT NULL AND school_id IS NULL)
+    )
 );
 CREATE INDEX idx_devices_child   ON devices (child_id);
 CREATE INDEX idx_devices_traccar ON devices (traccar_id);
@@ -341,6 +347,7 @@ CREATE TABLE geofences (
     active_from     TIME,
     active_to       TIME,
     active          BOOLEAN NOT NULL DEFAULT TRUE,
+    school_id       UUID,   -- attendance anchor; FK → schools(id) added in migration 0004 (schools is defined later)
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     -- A circle must have a center+radius; a polygon must have points.
@@ -457,7 +464,8 @@ CREATE TABLE alerts (
                     'sos','geofence_enter','geofence_exit','low_battery',
                     'critical_battery','device_offline','speed','watch_removed',
                     'route_deviation','pickup','school_arrival','school_absent',
-                    'crash','anomaly','chat_reply','family_join','system')),
+                    'crash','anomaly','chat_reply','family_join','system',
+                    'bus_arrival')),  -- 'bus_arrival' added Sprint 8 (migration 0005)
     title       VARCHAR(200),
     body        TEXT,
     data        JSONB,                                -- {geofence_id, device_id, lat, lng, ...}
@@ -588,6 +596,7 @@ CREATE TABLE schools (
     on_time_before     TIME NOT NULL DEFAULT '09:00',
     late_until         TIME NOT NULL DEFAULT '11:00',
     arrival_window_from TIME NOT NULL DEFAULT '07:00',
+    school_days INTEGER[] NOT NULL DEFAULT ARRAY[1,2,3,4,5], -- ISO weekdays in session (Sprint 8, migration 0004)
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

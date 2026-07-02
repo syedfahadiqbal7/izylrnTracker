@@ -63,6 +63,7 @@ from app.models.child import Child, FamilyMember
 from app.models.location import Geofence, GeofenceEvent, PickupEvent
 from app.models.user import User
 from app.services.alert_service import AlertService
+from app.services.attendance_service import AttendanceEngine
 from app.services.children_service import effective_tier
 from app.services.fcm_gateway import FcmGateway
 
@@ -105,6 +106,7 @@ class GeofenceBreachService:
         # (fence, direction, as_school_arrival) tuples that pass every gate.
         to_fire: list[tuple[dict, str, bool]] = []
         pickup_zone: dict | None = None  # a school zone the child just EXITED (F17)
+        attendance: list[tuple[str, str]] = []  # (school_id, direction) for school-linked zones (F27)
         for fence in fences:
             try:
                 inside = self._inside(fence, lat, lng)
@@ -127,6 +129,10 @@ class GeofenceBreachService:
             # geofence's own notify/schedule/debounce gates — pickup is independent of them.
             if direction == "exit" and is_school_zone and pickup_zone is None:
                 pickup_zone = fence
+            # Attendance (F27): a geofence tagged with a school_id anchors that school's
+            # register — capture the raw enter/exit, independent of the alert gates below.
+            if fence.get("school_id"):
+                attendance.append((fence["school_id"], direction))
 
             if direction == "enter" and not fence["notify_enter"]:
                 continue
@@ -150,6 +156,10 @@ class GeofenceBreachService:
             await self._maybe_record_pickup(
                 child_id, pickup_zone, lat, lng, speed, bundle, now
             )
+        if attendance:
+            engine = AttendanceEngine(self.session_factory)
+            for school_id, direction in attendance:
+                await engine.record_transition(child_id, uuid.UUID(school_id), direction, now)
 
     # --------------------------------------------------------------- internals
     @staticmethod
@@ -425,4 +435,5 @@ class GeofenceBreachService:
             "active_days": f.active_days,
             "active_from": f.active_from.isoformat() if f.active_from else None,
             "active_to": f.active_to.isoformat() if f.active_to else None,
+            "school_id": str(f.school_id) if f.school_id else None,
         }

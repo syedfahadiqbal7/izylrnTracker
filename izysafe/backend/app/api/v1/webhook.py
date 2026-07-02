@@ -17,6 +17,7 @@ from app.api.deps import (
     get_device_status_service,
     get_fcm_gateway,
     get_geofence_breach_service,
+    get_bus_tracking_service,
     get_chat_inbound_service,
     get_realtime_gateway,
     get_route_deviation_service,
@@ -31,6 +32,7 @@ from app.core.redis import get_redis
 from app.schemas.chat import WatchMessageIn
 from app.schemas.location import TraccarForward
 from app.services.battery_service import BatteryService
+from app.services.bus_tracking_service import BusTrackingService
 from app.services.chat_service import ChatInboundService
 from app.services.device_status import DeviceStatusService
 from app.services.fcm_gateway import FcmGateway
@@ -77,6 +79,7 @@ async def traccar_position(
     speed: SpeedService = Depends(get_speed_service),
     geofence: GeofenceBreachService = Depends(get_geofence_breach_service),
     route: RouteDeviationService = Depends(get_route_deviation_service),
+    bus: BusTrackingService = Depends(get_bus_tracking_service),
 ) -> dict:
     """Ingest one decoded position: cache it, mark the device online, buffer it for
     the batch writer (hot path). Off the hot path in BackgroundTasks: the Firebase
@@ -85,6 +88,12 @@ async def traccar_position(
     result = await LocationService(db, redis).process_update(body)
     if not result.stored:
         return {"status": "ignored", "reason": result.reason}
+
+    # Bus tracker: only stop-arrival detection off the hot path (no child geofence/etc.).
+    if result.is_bus:
+        if not result.stale:
+            background.add_task(bus.check_stops, result.device_id, result.lat, result.lng)
+        return {"status": "accepted", "kind": "bus", "stale": result.stale}
 
     background.add_task(
         realtime.update_live_location, str(result.child_id), result.live_payload

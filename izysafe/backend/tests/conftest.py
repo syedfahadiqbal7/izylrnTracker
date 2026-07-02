@@ -19,6 +19,7 @@ from sqlalchemy.pool import NullPool
 
 from app.api.deps import (
     get_battery_service,
+    get_bus_tracking_service,
     get_chat_inbound_service,
     get_device_status_service,
     get_fcm_gateway,
@@ -42,6 +43,7 @@ from app.core.security import create_access_token
 from app.main import app
 from app.models.user import User
 from app.services.battery_service import BatteryService
+from app.services.bus_tracking_service import BusTrackingService
 from app.services.chat_service import ChatInboundService
 from app.services.device_status import DeviceStatusService
 from app.services.geofence_breach_service import GeofenceBreachService
@@ -194,6 +196,9 @@ async def client(
     )
     app.dependency_overrides[get_chat_inbound_service] = lambda: ChatInboundService(
         lambda: NonClosingSession(db_session), fake_fcm_gateway
+    )
+    app.dependency_overrides[get_bus_tracking_service] = lambda: BusTrackingService(
+        lambda: NonClosingSession(db_session), redis_client, fake_fcm_gateway
     )
 
     transport = ASGITransport(app=app)

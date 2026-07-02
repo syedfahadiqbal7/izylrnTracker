@@ -28,6 +28,13 @@ STALE_AFTER_SECONDS = 300  # ts older than 5 min → stale (alerts suppressed do
 
 
 @dataclass
+class ResolvedDevice:
+    device_id: uuid.UUID
+    child_id: uuid.UUID | None
+    device_type: str
+
+
+@dataclass
 class ProcessResult:
     """Outcome of one position update, for the endpoint response and tests."""
 
@@ -40,6 +47,7 @@ class ProcessResult:
     lng: float | None = None
     battery: int | None = None          # percent, for the off-hot-path battery check
     speed: float | None = None          # km/h, for the off-hot-path speed check
+    is_bus: bool = False                # a school bus tracker → bus stop-arrival path, not the child path
     # The child "latest" payload, reused for the off-hot-path Firebase live write.
     live_payload: dict | None = None
 
@@ -63,10 +71,9 @@ class LocationService:
         pos = body.position
         unique_id = body.device.unique_id if body.device else None
 
-        resolved = await self._resolve_device(pos.device_id, unique_id)
+        resolved = await self._resolve_full(pos.device_id, unique_id)
         if resolved is None:
             return ProcessResult(stored=False, reason="unknown_device")
-        device_id, child_id = resolved
 
         if not pos.valid or not _coords_valid(pos.latitude, pos.longitude):
             return ProcessResult(stored=False, reason="invalid_coordinates")
@@ -74,17 +81,29 @@ class LocationService:
         now = datetime.now(timezone.utc)
         ts = pos.best_time or now
         stale = (now - ts).total_seconds() > STALE_AFTER_SECONDS
-
-        live_payload = await self._write_cache(device_id, child_id, pos, ts)
-        await self.redis.set(rk.device_online(device_id), "1", ex=rk.ONLINE_TTL)
-        # lastseen = receipt time (not fix time) — drives offline detection.
+        await self.redis.set(rk.device_online(resolved.device_id), "1", ex=rk.ONLINE_TTL)
         await self.redis.set(
-            rk.device_lastseen(device_id), str(now.timestamp()), ex=rk.LASTSEEN_TTL
+            rk.device_lastseen(resolved.device_id), str(now.timestamp()), ex=rk.LASTSEEN_TTL
         )
-        await self._enqueue_batch(device_id, child_id, pos, ts)
 
+        # Bus tracker: no child → cache the device-latest for the live map only; skip the
+        # child cache/history/geofence path. Stop-arrival runs off the hot path (webhook).
+        if resolved.device_type == "bus":
+            await self.redis.set(
+                rk.loc_device_latest(resolved.device_id),
+                json.dumps({"lat": pos.latitude, "lng": pos.longitude, "ts": ts.isoformat()}),
+                ex=rk.LOCATION_CACHE_TTL,
+            )
+            return ProcessResult(
+                stored=True, stale=stale, is_bus=True, device_id=resolved.device_id,
+                lat=pos.latitude, lng=pos.longitude,
+            )
+
+        child_id = resolved.child_id
+        live_payload = await self._write_cache(resolved.device_id, child_id, pos, ts)
+        await self._enqueue_batch(resolved.device_id, child_id, pos, ts)
         return ProcessResult(
-            stored=True, stale=stale, device_id=device_id, child_id=child_id,
+            stored=True, stale=stale, device_id=resolved.device_id, child_id=child_id,
             lat=pos.latitude, lng=pos.longitude,
             battery=pos.battery_pct, speed=pos.speed_kmh, live_payload=live_payload,
         )
@@ -92,20 +111,29 @@ class LocationService:
     async def resolve_device(
         self, traccar_id: int, unique_id: str | None
     ) -> tuple[uuid.UUID, uuid.UUID] | None:
-        """Public device→(device_id, child_id) resolution (Redis-cached), reused by
-        the SOS alarm webhook."""
-        return await self._resolve_device(traccar_id, unique_id)
+        """Public device→(device_id, child_id) resolution (Redis-cached), reused by the
+        SOS/chat/message/tamper webhooks. Returns None for a bus device (no child) so
+        those child-oriented paths ignore it."""
+        resolved = await self._resolve_full(traccar_id, unique_id)
+        if resolved is None or resolved.child_id is None:
+            return None
+        return resolved.device_id, resolved.child_id
 
     # --------------------------------------------------------------- internals
-    async def _resolve_device(
+    async def _resolve_full(
         self, traccar_id: int, unique_id: str | None
-    ) -> tuple[uuid.UUID, uuid.UUID] | None:
-        """traccar_id (or IMEI fallback) → (device_id, child_id), Redis-cached 1h."""
+    ) -> ResolvedDevice | None:
+        """traccar_id (or IMEI fallback) → ResolvedDevice (id, child_id, type), cached 1h."""
         cache_key = rk.traccar_device_map(traccar_id)
         cached = await self.redis.get(cache_key)
         if cached:
             data = json.loads(cached)
-            return uuid.UUID(data["device_id"]), uuid.UUID(data["child_id"])
+            cid = data.get("child_id")
+            return ResolvedDevice(
+                uuid.UUID(data["device_id"]),
+                uuid.UUID(cid) if cid else None,
+                data.get("device_type", "watch"),
+            )
 
         device = await self._lookup_device(traccar_id, unique_id)
         if device is None:
@@ -113,10 +141,14 @@ class LocationService:
 
         await self.redis.set(
             cache_key,
-            json.dumps({"device_id": str(device.id), "child_id": str(device.child_id)}),
+            json.dumps({
+                "device_id": str(device.id),
+                "child_id": str(device.child_id) if device.child_id else None,
+                "device_type": device.device_type,
+            }),
             ex=rk.TRACCAR_MAP_TTL,
         )
-        return device.id, device.child_id
+        return ResolvedDevice(device.id, device.child_id, device.device_type)
 
     async def _lookup_device(self, traccar_id: int, unique_id: str | None) -> Device | None:
         stmt = select(Device).where(

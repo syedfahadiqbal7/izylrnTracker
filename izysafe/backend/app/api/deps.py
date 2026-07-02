@@ -23,9 +23,11 @@ from app.core.database import AsyncSessionLocal, get_db
 from app.core.errors import APIException
 from app.core.redis import get_redis
 from app.core.security import decode_token
+from app.models.school import SchoolAdmin
 from app.models.user import User
 from app.services.battery_service import BatteryService
 from app.services.device_status import DeviceStatusService
+from app.services.bus_tracking_service import BusTrackingService
 from app.services.chat_service import ChatInboundService
 from app.services.fcm_gateway import FcmGateway
 from app.services.geocoding_gateway import GeocodingGateway
@@ -139,6 +141,14 @@ def get_chat_inbound_service(
     return ChatInboundService(AsyncSessionLocal, fcm)
 
 
+def get_bus_tracking_service(
+    redis: Redis = Depends(get_redis),
+    fcm: FcmGateway = Depends(get_fcm_gateway),
+) -> BusTrackingService:
+    # BackgroundTask → own session factory (the request session is gone by then).
+    return BusTrackingService(AsyncSessionLocal, redis, fcm)
+
+
 async def verify_traccar_secret(
     x_traccar_secret: str | None = Header(default=None, alias="X-Traccar-Secret"),
 ) -> None:
@@ -205,3 +215,64 @@ async def get_current_auth(
 
 async def get_current_user(auth: AuthContext = Depends(get_current_auth)) -> User:
     return auth.user
+
+
+@dataclass
+class SchoolAdminContext:
+    """Resolved school-admin auth: the admin row + the verified access claims."""
+
+    admin: SchoolAdmin
+    payload: dict
+
+
+async def get_current_school_admin_auth(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> SchoolAdminContext:
+    """Authenticate a school admin. Same JWT/denylist rules as parents, but the token
+    must carry the ``school_admin`` scope — so a parent token (no scope, and a `sub`
+    that isn't a school_admins row) can never reach a school endpoint."""
+    if credentials is None or not credentials.credentials:
+        raise APIException(401, "TOKEN_MISSING", "Authentication required")
+    try:
+        payload = decode_token(credentials.credentials, expected_type="access")
+    except jwt.ExpiredSignatureError:
+        raise APIException(401, "TOKEN_EXPIRED", "Session expired — please log in again")
+    except (jwt.PyJWTError, ValueError):
+        raise APIException(401, "TOKEN_INVALID", "Invalid authentication token")
+
+    if payload.get("scope") != "school_admin":
+        raise APIException(401, "TOKEN_INVALID", "Invalid authentication token")
+
+    jti = payload.get("jti")
+    if jti:
+        try:
+            revoked = await is_denylisted(redis, "access", jti)
+        except RedisError:
+            revoked = False  # fail-open, like parents
+        if revoked:
+            raise APIException(401, "TOKEN_REVOKED", "Session ended — please log in again")
+
+    try:
+        admin_id = uuid.UUID(str(payload.get("sub")))
+    except (ValueError, TypeError):
+        raise APIException(401, "TOKEN_INVALID", "Invalid authentication token")
+
+    admin = (
+        await db.execute(
+            select(SchoolAdmin).where(
+                SchoolAdmin.id == admin_id, SchoolAdmin.active.is_(True)
+            )
+        )
+    ).scalar_one_or_none()
+    if admin is None:
+        raise APIException(401, "ADMIN_NOT_FOUND", "Account not found — please log in again")
+
+    return SchoolAdminContext(admin=admin, payload=payload)
+
+
+async def get_current_school_admin(
+    auth: SchoolAdminContext = Depends(get_current_school_admin_auth),
+) -> SchoolAdmin:
+    return auth.admin

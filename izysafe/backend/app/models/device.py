@@ -20,24 +20,37 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, SoftDeleteMixin, TimestampMixin, UpdatedAtMixin, UUIDPkMixin
 
 _DEVICE_TYPE_CHECK = "device_type IN ('watch','bag_tracker','phone')"
+# Devices also allow 'bus' (a school bus GPS tracker, Sprint 8); pairing codes don't.
+_DEVICE_TYPE_CHECK_WITH_BUS = "device_type IN ('watch','bag_tracker','phone','bus')"
 
 
 class Device(Base, UUIDPkMixin, TimestampMixin, UpdatedAtMixin, SoftDeleteMixin):
     __tablename__ = "devices"
     __table_args__ = (
-        CheckConstraint(_DEVICE_TYPE_CHECK, name="ck_device_type"),
+        CheckConstraint(_DEVICE_TYPE_CHECK_WITH_BUS, name="ck_device_type"),
         CheckConstraint("protocol IN ('gt06','tk103','h02')", name="ck_device_protocol"),
         CheckConstraint("battery_threshold IN (10,15,20,30)", name="ck_device_batt_threshold"),
         CheckConstraint(
             "watch_removed_threshold_min IN (5,10,15)", name="ck_device_removed_threshold"
         ),
         CheckConstraint("last_battery BETWEEN 0 AND 100", name="ck_device_last_battery"),
+        # A bus tracker has a school + no child; every other device has a child + no school.
+        CheckConstraint(
+            "(device_type = 'bus' AND child_id IS NULL AND school_id IS NOT NULL) "
+            "OR (device_type <> 'bus' AND child_id IS NOT NULL AND school_id IS NULL)",
+            name="ck_device_owner",
+        ),
         Index("idx_devices_child", "child_id"),
         Index("idx_devices_traccar", "traccar_id"),
     )
 
-    child_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("children.id", ondelete="CASCADE"), nullable=False
+    # Nullable since Sprint 8 (bus devices have no child); the ck_device_owner CHECK above
+    # keeps every non-bus device child-owned.
+    child_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("children.id", ondelete="CASCADE")
+    )
+    school_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("schools.id", ondelete="CASCADE")
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     device_type: Mapped[str] = mapped_column(String(20), nullable=False, server_default="watch")

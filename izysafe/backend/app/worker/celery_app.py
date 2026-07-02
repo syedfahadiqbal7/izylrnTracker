@@ -34,5 +34,11 @@ celery_app.conf.update(
             "task": "izysafe.maintenance.soft_delete_purge",
             "schedule": crontab(hour=3, minute=0),          # daily 03:00 UTC
         },
+        "attendance-absent-sweep": {
+            "task": "izysafe.attendance.absent_sweep",
+            # Hourly: late_until varies per school/timezone, so each school is swept on
+            # the first run after its window closes. Idempotent (per-school tz + upsert).
+            "schedule": crontab(minute=5),
+        },
     },
 )

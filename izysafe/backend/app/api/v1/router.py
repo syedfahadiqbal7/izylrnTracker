@@ -7,12 +7,15 @@ from app.api.v1 import (
     alerts,
     audio,
     auth,
+    bus,
     chat,
     children,
     emergency,
+    enrollments,
     family,
     geofences,
     routes,
+    schools,
     share,
     sos,
     subscriptions,
@@ -23,12 +26,15 @@ api_router = APIRouter()
 api_router.include_router(alerts.router)
 api_router.include_router(audio.router)
 api_router.include_router(auth.router)
+api_router.include_router(bus.router)
 api_router.include_router(chat.router)
 api_router.include_router(children.router)
 api_router.include_router(emergency.router)
+api_router.include_router(enrollments.router)
 api_router.include_router(family.router)
 api_router.include_router(geofences.router)
 api_router.include_router(routes.router)
+api_router.include_router(schools.router)
 api_router.include_router(share.router)
 api_router.include_router(sos.router)
 api_router.include_router(subscriptions.router)

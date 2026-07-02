@@ -87,6 +87,16 @@ class Settings(BaseSettings):
     jwt_access_expire_minutes: int = 1440
     jwt_refresh_expire_days: int = 30
 
+    # ---- School / B2B (Sprint 8) ----
+    school_seed_secret: str = ""              # env-gated bootstrap secret; empty ⇒ seed disabled
+    school_login_max_attempts: int = 10       # failed logins per email per window
+    school_login_window_seconds: int = 900    # 15 min brute-force window
+
+    # ---- Bus tracking (Sprint 8, F28) ----
+    bus_stop_radius_m: int = 150              # within this of a stop ⇒ "arrived" (bus_arrival)
+    bus_stop_debounce_seconds: int = 300      # 5 min anti-repeat per route+stop
+    bus_avg_speed_kmh: float = 20.0           # for the straight-line ETA estimate
+
     # ---- OTP (Sprint 1) ----
     msg91_auth_key: str = ""
     msg91_whatsapp_template: str = ""   # MSG91 WhatsApp template/flow id
