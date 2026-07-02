@@ -10,6 +10,7 @@ from app.api.v1 import (
     bus,
     chat,
     children,
+    driver,
     emergency,
     enrollments,
     family,
@@ -29,6 +30,7 @@ api_router.include_router(auth.router)
 api_router.include_router(bus.router)
 api_router.include_router(chat.router)
 api_router.include_router(children.router)
+api_router.include_router(driver.router)
 api_router.include_router(emergency.router)
 api_router.include_router(enrollments.router)
 api_router.include_router(family.router)

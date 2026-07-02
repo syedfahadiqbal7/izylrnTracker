@@ -7,10 +7,12 @@ writes + staff invites require role='admin'.
 """
 from __future__ import annotations
 
+import csv
+import io
 import uuid
-from datetime import date
+from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +30,8 @@ from app.models.school import School, SchoolAdmin, StudentEnrollment
 from app.schemas.auth import LogoutRequest, RefreshRequest
 from app.schemas.school import (
     AttendanceRecordResponse,
+    AttendanceReportResponse,
+    AuditLogResponse,
     DailyRegisterRow,
     EnrollmentResponse,
     EnrollStudentRequest,
@@ -46,6 +50,8 @@ from app.schemas.school import (
     TokenPairResponse,
 )
 from app.services.attendance_service import AttendanceService
+from app.services.audit_service import AuditService
+from app.core.errors import APIException
 from app.services.email_gateway import EmailGateway
 from app.services.enrollment_service import EnrollmentService
 from app.services.password_reset_service import PasswordResetService
@@ -285,6 +291,35 @@ async def update_my_school(
 
 
 # --------------------------------------------------------------------------- #
+# Audit log (Slice 2) — role='admin' only
+# --------------------------------------------------------------------------- #
+@router.get("/audit")
+async def list_audit(
+    actor_type: str | None = Query(None),
+    action: str | None = Query(None),
+    entity_type: str | None = Query(None),
+    entity_id: uuid.UUID | None = Query(None),
+    date_from: datetime | None = Query(None, alias="from"),
+    date_to: datetime | None = Query(None, alias="to"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """The school's audit trail, newest first (requires role='admin')."""
+    if admin.role != "admin":
+        raise APIException(403, "FORBIDDEN", "This action requires an admin role")
+    rows, total = await AuditService.query(
+        db, admin.school_id, actor_type=actor_type, action=action, entity_type=entity_type,
+        entity_id=entity_id, date_from=date_from, date_to=date_to, limit=limit, offset=offset,
+    )
+    return success(
+        [AuditLogResponse.model_validate(r).model_dump(mode="json") for r in rows],
+        meta={"total": total, "limit": limit, "offset": offset},
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Roster / enrollment (school side)
 # --------------------------------------------------------------------------- #
 @router.post("/students", status_code=201)
@@ -353,6 +388,45 @@ async def daily_register(
     """The daily register: every consented student's status for a date."""
     rows = await AttendanceService(db).daily_register(admin, date_, class_grade)
     return success([DailyRegisterRow(**r).model_dump(mode="json") for r in rows])
+
+
+@router.get("/attendance/report")
+async def attendance_report(
+    date_from: date = Query(..., alias="from"),
+    date_to: date = Query(..., alias="to"),
+    class_grade: str | None = Query(None),
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Date-range attendance summary + per-student rollup (admin or staff; R4)."""
+    report = await AttendanceService(db).report(admin, date_from, date_to, class_grade)
+    return success(AttendanceReportResponse(**report).model_dump(mode="json"))
+
+
+@router.get("/attendance/export")
+async def attendance_export(
+    date_from: date = Query(..., alias="from"),
+    date_to: date = Query(..., alias="to"),
+    class_grade: str | None = Query(None),
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Flat per-record attendance register as a CSV download (R3)."""
+    rows = await AttendanceService(db).export_rows(admin, date_from, date_to, class_grade)
+    fields = [
+        "date", "child_id", "child_name", "class_grade", "status",
+        "arrival_time", "departure_time", "total_hours", "marked_manually",
+    ]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fields)
+    writer.writeheader()
+    writer.writerows(rows)
+    filename = f"attendance_{date_from.isoformat()}_{date_to.isoformat()}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/students/{enrollment_id}/attendance")

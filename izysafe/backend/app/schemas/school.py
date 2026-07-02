@@ -87,6 +87,7 @@ class SchoolAdminResponse(BaseModel):
     name: str | None = None
     role: str
     active: bool
+    last_login_at: datetime | None = None
     created_at: datetime
 
 
@@ -202,3 +203,49 @@ class DailyRegisterRow(BaseModel):
 class ManualAttendanceRequest(BaseModel):
     date: _date
     status: AttendanceStatus
+
+
+class AttendanceReportSummary(BaseModel):
+    by_status: dict[str, int]        # {on_time, late, absent, early, unknown}
+    records: int
+    students: int
+    present_rate: float              # (on_time+late+early) / records
+
+
+class StudentAttendanceSummary(BaseModel):
+    child_id: uuid.UUID
+    child_name: str
+    class_grade: str | None = None
+    on_time: int
+    late: int
+    early: int
+    absent: int
+    unknown: int
+    present_days: int
+    total_days: int
+    rate: float
+
+
+class AttendanceReportResponse(BaseModel):
+    date_from: _date
+    date_to: _date
+    class_grade: str | None = None
+    summary: AttendanceReportSummary
+    per_student: list[StudentAttendanceSummary]
+
+
+# --------------------------------------------------------------------------- #
+# Audit log (Slice 2)
+# --------------------------------------------------------------------------- #
+class AuditLogResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    school_id: uuid.UUID | None = None
+    actor_type: str
+    actor_id: uuid.UUID | None = None
+    action: str
+    entity_type: str | None = None
+    entity_id: uuid.UUID | None = None
+    details: dict | None = None
+    created_at: datetime

@@ -23,7 +23,7 @@ from app.core.database import AsyncSessionLocal, get_db
 from app.core.errors import APIException
 from app.core.redis import get_redis
 from app.core.security import decode_token
-from app.models.school import SchoolAdmin
+from app.models.school import Driver, SchoolAdmin
 from app.models.user import User
 from app.services.battery_service import BatteryService
 from app.services.device_status import DeviceStatusService
@@ -281,3 +281,61 @@ async def get_current_school_admin(
     auth: SchoolAdminContext = Depends(get_current_school_admin_auth),
 ) -> SchoolAdmin:
     return auth.admin
+
+
+@dataclass
+class DriverContext:
+    """Resolved driver auth: the driver row + the verified access claims."""
+
+    driver: Driver
+    payload: dict
+
+
+async def get_current_driver_auth(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> DriverContext:
+    """Authenticate a driver — same JWT/denylist rules, but the token must carry the
+    `driver` scope (so parent/admin tokens can't reach driver endpoints)."""
+    if credentials is None or not credentials.credentials:
+        raise APIException(401, "TOKEN_MISSING", "Authentication required")
+    try:
+        payload = decode_token(credentials.credentials, expected_type="access")
+    except jwt.ExpiredSignatureError:
+        raise APIException(401, "TOKEN_EXPIRED", "Session expired — please log in again")
+    except (jwt.PyJWTError, ValueError):
+        raise APIException(401, "TOKEN_INVALID", "Invalid authentication token")
+
+    if payload.get("scope") != "driver":
+        raise APIException(401, "TOKEN_INVALID", "Invalid authentication token")
+
+    jti = payload.get("jti")
+    if jti:
+        try:
+            revoked = await is_denylisted(redis, "access", jti)
+        except RedisError:
+            revoked = False  # fail-open, like the other identities
+        if revoked:
+            raise APIException(401, "TOKEN_REVOKED", "Session ended — please log in again")
+
+    try:
+        driver_id = uuid.UUID(str(payload.get("sub")))
+    except (ValueError, TypeError):
+        raise APIException(401, "TOKEN_INVALID", "Invalid authentication token")
+
+    driver = (
+        await db.execute(
+            select(Driver).where(Driver.id == driver_id, Driver.active.is_(True))
+        )
+    ).scalar_one_or_none()
+    if driver is None:
+        raise APIException(401, "DRIVER_NOT_FOUND", "Account not found — please log in again")
+
+    return DriverContext(driver=driver, payload=payload)
+
+
+async def get_current_driver(
+    auth: DriverContext = Depends(get_current_driver_auth),
+) -> Driver:
+    return auth.driver

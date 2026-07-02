@@ -167,6 +167,11 @@ def pwchange_rate(admin_id: uuid.UUID | str) -> str:
     return f"rate:pwchange:{admin_id}"
 
 
+def driver_login_rate(phone: str) -> str:
+    """Per-phone failed driver-login counter (Sprint 10 brute-force guard)."""
+    return f"rate:driverlogin:{phone}"
+
+
 def gateway_event(gateway: str, event_id: str) -> str:
     """Idempotency marker for a processed payment-gateway webhook event (Sprint 6);
     dedups gateway retries so activation alerts don't double-fire."""

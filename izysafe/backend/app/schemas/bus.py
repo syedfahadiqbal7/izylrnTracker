@@ -16,6 +16,7 @@ class DriverCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     phone: str | None = Field(None, max_length=20)
     verified: bool = False
+    access_code: str | None = Field(None, min_length=6, max_length=100)  # optional login code
 
 
 class DriverUpdate(BaseModel):
@@ -130,6 +131,80 @@ class BusDeviceResponse(BaseModel):
     traccar_id: int | None = None
     is_online: bool
     created_at: datetime
+
+
+# ------------------------------------------------------- driver app (S10)
+class DriverSetCodeRequest(BaseModel):
+    access_code: str = Field(..., min_length=6, max_length=100)
+
+
+class DriverLoginRequest(BaseModel):
+    phone: str = Field(..., min_length=1, max_length=20)
+    code: str = Field(..., min_length=1, max_length=100)
+
+
+class DriverProfileResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    school_id: uuid.UUID
+    name: str
+    phone: str | None = None
+    verified: bool
+    active: bool
+    last_login_at: datetime | None = None
+
+
+class DriverRouteStop(BaseModel):
+    id: uuid.UUID
+    name: str
+    lat: float
+    lng: float
+    seq: int
+    scheduled_at: time | None = None
+
+
+class DriverRosterEntry(BaseModel):
+    child_id: uuid.UUID
+    child_name: str
+    stop_id: uuid.UUID | None = None
+
+
+class DriverRouteResponse(BaseModel):
+    route_id: uuid.UUID
+    name: str
+    active_from: time | None = None
+    active_to: time | None = None
+    active: bool
+    device_id: uuid.UUID | None = None
+    active_trip: dict | None = None          # {trip_id, started_at} while a trip is running
+    stops: list[DriverRouteStop]
+    roster: list[DriverRosterEntry]
+
+
+class TripStartRequest(BaseModel):
+    route_id: uuid.UUID
+
+
+class TripResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    route_id: uuid.UUID
+    driver_id: uuid.UUID | None = None
+    status: str
+    started_at: datetime
+    ended_at: datetime | None = None
+
+
+class BoardingResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    trip_id: uuid.UUID
+    child_id: uuid.UUID
+    stop_id: uuid.UUID | None = None
+    boarded_at: datetime
 
 
 # --------------------------------------------------- parent-facing live bus

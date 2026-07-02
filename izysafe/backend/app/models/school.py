@@ -57,6 +57,7 @@ class SchoolAdmin(Base, UUIDPkMixin, TimestampMixin):
     name: Mapped[str | None] = mapped_column(String(100))
     role: Mapped[str] = mapped_column(String(20), nullable=False, server_default="admin")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class StudentEnrollment(Base, UUIDPkMixin):
@@ -115,8 +116,11 @@ class Driver(Base, UUIDPkMixin, TimestampMixin):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(20))
+    # bcrypt of the admin-set access code (Sprint 10); null ⇒ driver can't log in yet.
+    password_hash: Mapped[str | None] = mapped_column(String(100))
     verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class BusRoute(Base, UUIDPkMixin, TimestampMixin):
@@ -163,4 +167,47 @@ class BusAssignment(Base, UUIDPkMixin, TimestampMixin):
     )
     stop_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("bus_route_stops.id", ondelete="SET NULL")
+    )
+
+
+class BusTrip(Base, UUIDPkMixin):
+    """A driver-run trip on a route (Sprint 10). One active trip per route (partial
+    unique index); the driver marks arrivals/boardings against it."""
+
+    __tablename__ = "bus_trips"
+    __table_args__ = (
+        CheckConstraint("status IN ('active','ended')", name="ck_bus_trip_status"),
+        Index("idx_bus_trips_driver", "driver_id"),
+    )
+
+    route_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("bus_routes.id", ondelete="CASCADE"), nullable=False
+    )
+    driver_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("drivers.id", ondelete="SET NULL")
+    )
+    status: Mapped[str] = mapped_column(String(10), nullable=False, server_default="active")
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class BusBoarding(Base, UUIDPkMixin):
+    """A child's manual pickup confirmation during a trip (one per child per trip)."""
+
+    __tablename__ = "bus_boardings"
+    __table_args__ = (UniqueConstraint("trip_id", "child_id", name="uq_boarding_trip_child"),)
+
+    trip_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("bus_trips.id", ondelete="CASCADE"), nullable=False
+    )
+    child_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("children.id", ondelete="CASCADE"), nullable=False
+    )
+    stop_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("bus_route_stops.id", ondelete="SET NULL")
+    )
+    boarded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
     )

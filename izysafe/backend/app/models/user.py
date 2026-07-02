@@ -42,6 +42,7 @@ class User(Base, UUIDPkMixin, TimestampMixin, UpdatedAtMixin, SoftDeleteMixin):
     subscription_tier: Mapped[str] = mapped_column(String(20), nullable=False, server_default="free")
     subscription_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     fcm_token: Mapped[str | None] = mapped_column(Text)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     quiet_hours_from: Mapped[time | None] = mapped_column(Time)
     quiet_hours_to: Mapped[time | None] = mapped_column(Time)
 

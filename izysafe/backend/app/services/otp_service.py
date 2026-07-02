@@ -88,6 +88,7 @@ class OtpService:
         # Correct OTP → consume the session and (find or) create the user.
         session.verified = True
         user, is_new = await self._get_or_create_user(phone)
+        user.last_login_at = datetime.now(timezone.utc)  # stamp parent login (Sprint 10)
         await self.db.commit()
 
         return {

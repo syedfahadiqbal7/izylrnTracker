@@ -36,10 +36,14 @@ from app.core.errors import APIException
 from app.models.child import Child
 from app.models.location import Geofence
 from app.models.school import AttendanceRecord, School, SchoolAdmin, StudentEnrollment
+from app.services.audit_service import AuditService
 
 logger = logging.getLogger("izysafe.attendance")
 
 _CONFLICT = ["school_id", "child_id", "date"]
+_MAX_REPORT_DAYS = 366          # bound the report/export span
+_PRESENT = ("on_time", "late", "early")
+_STATUSES = ("on_time", "late", "absent", "early", "unknown")
 
 
 def _local(now: datetime, tz_name: str) -> datetime:
@@ -239,6 +243,121 @@ class AttendanceService:
             for e, c, r in rows
         ]
 
+    async def report(
+        self, admin: SchoolAdmin, date_from: date, date_to: date, class_grade: str | None
+    ) -> dict[str, Any]:
+        """Date-range summary + per-student rollup over existing attendance_records
+        (which the daily sweep fills with 'absent' rows). Opted-in students only."""
+        self._guard_range(date_from, date_to)
+        conds = self._report_conditions(admin, date_from, date_to, class_grade)
+
+        # Overall counts by status.
+        by_status = {s: 0 for s in _STATUSES}
+        for status, count in (
+            await self.db.execute(
+                select(AttendanceRecord.status, func.count())
+                .select_from(AttendanceRecord)
+                .join(StudentEnrollment, self._enroll_join())
+                .join(Child, Child.id == AttendanceRecord.child_id)
+                .where(*conds)
+                .group_by(AttendanceRecord.status)
+            )
+        ).all():
+            by_status[status] = by_status.get(status, 0) + count
+        records = sum(by_status.values())
+        present = sum(by_status[s] for s in _PRESENT)
+
+        # Per-student pivot.
+        students: dict[uuid.UUID, dict[str, Any]] = {}
+        for child_id, name, cg, status, count in (
+            await self.db.execute(
+                select(AttendanceRecord.child_id, Child.name, StudentEnrollment.class_grade,
+                       AttendanceRecord.status, func.count())
+                .select_from(AttendanceRecord)
+                .join(StudentEnrollment, self._enroll_join())
+                .join(Child, Child.id == AttendanceRecord.child_id)
+                .where(*conds)
+                .group_by(AttendanceRecord.child_id, Child.name, StudentEnrollment.class_grade, AttendanceRecord.status)
+            )
+        ).all():
+            s = students.setdefault(child_id, {
+                "child_id": child_id, "child_name": name, "class_grade": cg,
+                **{st: 0 for st in _STATUSES},
+            })
+            s[status] = s.get(status, 0) + count
+
+        per_student = []
+        for s in students.values():
+            total = sum(s[st] for st in _STATUSES)
+            pres = sum(s[st] for st in _PRESENT)
+            per_student.append({
+                **s, "present_days": pres, "total_days": total,
+                "rate": round(pres / total, 3) if total else 0.0,
+            })
+        per_student.sort(key=lambda x: (x["class_grade"] or "", x["child_name"]))
+
+        return {
+            "date_from": date_from, "date_to": date_to, "class_grade": class_grade,
+            "summary": {
+                "by_status": by_status, "records": records, "students": len(students),
+                "present_rate": round(present / records, 3) if records else 0.0,
+            },
+            "per_student": per_student,
+        }
+
+    async def export_rows(
+        self, admin: SchoolAdmin, date_from: date, date_to: date, class_grade: str | None
+    ) -> list[dict[str, Any]]:
+        """Flat per-record rows for the CSV register export."""
+        self._guard_range(date_from, date_to)
+        conds = self._report_conditions(admin, date_from, date_to, class_grade)
+        rows = (
+            await self.db.execute(
+                select(AttendanceRecord, Child.name, StudentEnrollment.class_grade)
+                .select_from(AttendanceRecord)
+                .join(StudentEnrollment, self._enroll_join())
+                .join(Child, Child.id == AttendanceRecord.child_id)
+                .where(*conds)
+                .order_by(StudentEnrollment.class_grade, Child.name, AttendanceRecord.date)
+            )
+        ).all()
+        return [
+            {
+                "date": r.date.isoformat(), "child_id": str(r.child_id), "child_name": name,
+                "class_grade": cg or "", "status": r.status,
+                "arrival_time": r.arrival_time.isoformat() if r.arrival_time else "",
+                "departure_time": r.departure_time.isoformat() if r.departure_time else "",
+                "total_hours": r.total_hours if r.total_hours is not None else "",
+                "marked_manually": r.marked_manually,
+            }
+            for r, name, cg in rows
+        ]
+
+    @staticmethod
+    def _enroll_join():
+        return (
+            (StudentEnrollment.child_id == AttendanceRecord.child_id)
+            & (StudentEnrollment.school_id == AttendanceRecord.school_id)
+            & StudentEnrollment.parent_opt_in.is_(True)
+        )
+
+    def _report_conditions(self, admin, date_from, date_to, class_grade):
+        conds = [
+            AttendanceRecord.school_id == admin.school_id,
+            AttendanceRecord.date >= date_from,
+            AttendanceRecord.date <= date_to,
+        ]
+        if class_grade is not None:
+            conds.append(StudentEnrollment.class_grade == class_grade)
+        return conds
+
+    @staticmethod
+    def _guard_range(date_from: date, date_to: date) -> None:
+        if date_to < date_from:
+            raise APIException(422, "INVALID_RANGE", "'to' must be on or after 'from'")
+        if (date_to - date_from).days > _MAX_REPORT_DAYS:
+            raise APIException(422, "RANGE_TOO_LARGE", f"Range must be at most {_MAX_REPORT_DAYS} days")
+
     async def child_history(
         self, admin: SchoolAdmin, enrollment_id: uuid.UUID, date_from: date, date_to: date
     ) -> list[AttendanceRecord]:
@@ -271,6 +390,10 @@ class AttendanceService:
         else:
             rec.status = status
             rec.marked_manually = True
+        AuditService.log(self.db, action="attendance.manual_override", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="child", entity_id=enrollment.child_id,
+                         details={"date": day.isoformat(), "status": status})
         await self.db.commit()
         await self.db.refresh(rec)
         return rec
