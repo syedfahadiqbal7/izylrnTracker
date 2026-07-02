@@ -22,6 +22,7 @@ from app.api.deps import (
     get_bus_tracking_service,
     get_chat_inbound_service,
     get_device_status_service,
+    get_email_gateway,
     get_fcm_gateway,
     get_geocoding_gateway,
     get_geofence_breach_service,
@@ -52,6 +53,7 @@ from app.services.sos_service import SosAlarmService
 from app.services.watch_removed_service import WatchRemovedService
 from app.services.speed_service import SpeedService
 from tests.fakes import (
+    FakeEmailGateway,
     FakeFcmGateway,
     FakeGateway,
     FakeGeocodingGateway,
@@ -142,6 +144,11 @@ def fake_geocoding_gateway() -> FakeGeocodingGateway:
 
 
 @pytest.fixture
+def fake_email_gateway() -> FakeEmailGateway:
+    return FakeEmailGateway()
+
+
+@pytest.fixture
 def fake_razorpay_gateway() -> FakeRazorpayGateway:
     return FakeRazorpayGateway()
 
@@ -156,6 +163,7 @@ async def client(
     db_session, redis_client, fake_gateway, fake_invite_gateway,
     fake_realtime_gateway, fake_fcm_gateway, fake_traccar_gateway,
     fake_razorpay_gateway, fake_stripe_gateway, fake_geocoding_gateway,
+    fake_email_gateway,
 ):
     async def _override_db():
         yield db_session
@@ -168,6 +176,7 @@ async def client(
     app.dependency_overrides[get_fcm_gateway] = lambda: fake_fcm_gateway
     app.dependency_overrides[get_traccar_gateway] = lambda: fake_traccar_gateway
     app.dependency_overrides[get_geocoding_gateway] = lambda: fake_geocoding_gateway
+    app.dependency_overrides[get_email_gateway] = lambda: fake_email_gateway
     app.dependency_overrides[get_razorpay_gateway] = lambda: fake_razorpay_gateway
     app.dependency_overrides[get_stripe_gateway] = lambda: fake_stripe_gateway
     # Services whose work runs in a BackgroundTask (after the request session would

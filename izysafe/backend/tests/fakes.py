@@ -86,6 +86,18 @@ class FakeTraccarGateway:
         return self.ok
 
 
+class FakeEmailGateway:
+    """Stand-in for EmailGateway: records sent emails, returns a configurable ok."""
+
+    def __init__(self, ok: bool = True) -> None:
+        self.ok = ok
+        self.calls: list[dict] = []  # {to, subject, text, html}
+
+    async def send(self, to: str, subject: str, text: str, html: str | None = None) -> bool:
+        self.calls.append({"to": to, "subject": subject, "text": text, "html": html})
+        return self.ok
+
+
 class FakeGeocodingGateway:
     """Stand-in for GeocodingGateway: returns a configurable address (None = no match)."""
 

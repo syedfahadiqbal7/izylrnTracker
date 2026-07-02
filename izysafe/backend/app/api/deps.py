@@ -29,6 +29,7 @@ from app.services.battery_service import BatteryService
 from app.services.device_status import DeviceStatusService
 from app.services.bus_tracking_service import BusTrackingService
 from app.services.chat_service import ChatInboundService
+from app.services.email_gateway import EmailGateway
 from app.services.fcm_gateway import FcmGateway
 from app.services.geocoding_gateway import GeocodingGateway
 from app.services.geofence_breach_service import GeofenceBreachService
@@ -69,6 +70,10 @@ def get_traccar_gateway() -> TraccarGateway:
 
 def get_geocoding_gateway() -> GeocodingGateway:
     return GeocodingGateway()
+
+
+def get_email_gateway() -> EmailGateway:
+    return EmailGateway()
 
 
 def get_razorpay_gateway() -> RazorpayGateway:

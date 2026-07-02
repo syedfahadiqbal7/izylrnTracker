@@ -97,6 +97,25 @@ class Settings(BaseSettings):
     bus_stop_debounce_seconds: int = 300      # 5 min anti-repeat per route+stop
     bus_avg_speed_kmh: float = 20.0           # for the straight-line ETA estimate
 
+    # ---- Email / SMTP (Sprint 9) ----
+    smtp_host: str = ""                       # empty ⇒ EmailGateway no-ops (logs a warning)
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "no-reply@izysafe.app"
+    smtp_use_tls: bool = True
+
+    # ---- School-admin password reset (Sprint 9) ----
+    pwreset_token_ttl_minutes: int = 30
+    pwreset_base_url: str = "https://izysafe.app/school/reset-password"
+    pwreset_rate_per_email: int = 3           # forgot-password requests per email per window
+    pwreset_rate_per_ip: int = 10             # per IP per window
+    pwreset_rate_window_seconds: int = 3600   # 1 hour
+
+    # ---- School-admin self-service password change (Sprint 9 Slice 2) ----
+    pwchange_max_attempts: int = 5            # change-password attempts per admin per window
+    pwchange_window_seconds: int = 900        # 15 min
+
     # ---- OTP (Sprint 1) ----
     msg91_auth_key: str = ""
     msg91_whatsapp_template: str = ""   # MSG91 WhatsApp template/flow id

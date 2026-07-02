@@ -10,7 +10,7 @@ from __future__ import annotations
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,6 +18,7 @@ from app.api.deps import (
     SchoolAdminContext,
     get_current_school_admin,
     get_current_school_admin_auth,
+    get_email_gateway,
 )
 from app.core.database import get_db
 from app.core.errors import success
@@ -30,7 +31,12 @@ from app.schemas.school import (
     DailyRegisterRow,
     EnrollmentResponse,
     EnrollStudentRequest,
+    ForgotPasswordRequest,
     ManualAttendanceRequest,
+    PasswordChangeRequest,
+    ResetPasswordRequest,
+    SchoolAdminManageRequest,
+    SchoolAdminUpdateRequest,
     SchoolAdminResponse,
     SchoolLoginRequest,
     SchoolResponse,
@@ -40,7 +46,9 @@ from app.schemas.school import (
     TokenPairResponse,
 )
 from app.services.attendance_service import AttendanceService
+from app.services.email_gateway import EmailGateway
 from app.services.enrollment_service import EnrollmentService
+from app.services.password_reset_service import PasswordResetService
 from app.services.school_service import SchoolAuthService, SchoolService
 
 router = APIRouter(prefix="/schools", tags=["schools"])
@@ -98,6 +106,33 @@ async def refresh(
     return success(TokenPairResponse(**tokens).model_dump())
 
 
+@router.post("/auth/forgot-password")
+async def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+    email: EmailGateway = Depends(get_email_gateway),
+) -> dict:
+    """Request a password-reset link. Always returns the same generic message — it never
+    reveals whether the email is registered (anti-enumeration)."""
+    client_ip = request.client.host if request.client else None
+    await PasswordResetService(db, redis, email).forgot_password(payload.email, client_ip)
+    return success({"message": "If that email is registered, a reset link has been sent"})
+
+
+@router.post("/auth/reset-password")
+async def reset_password(
+    payload: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+    email: EmailGateway = Depends(get_email_gateway),
+) -> dict:
+    """Redeem a reset token and set a new password (single-use token)."""
+    await PasswordResetService(db, redis, email).reset_password(payload.token, payload.new_password)
+    return success({"success": True})
+
+
 @router.delete("/auth/logout")
 async def logout(
     payload: LogoutRequest,
@@ -121,6 +156,34 @@ async def current_admin(
     return success(_admin(admin))
 
 
+@router.patch("/admins/me")
+async def update_current_admin(
+    payload: SchoolAdminUpdateRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """Update the caller's own non-sensitive profile fields (currently `name`)."""
+    updated = await SchoolAuthService(db, redis).update_profile(
+        admin, payload.model_dump(exclude_unset=True)
+    )
+    return success(_admin(updated))
+
+
+@router.post("/admins/me/password")
+async def change_password(
+    payload: PasswordChangeRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """Self-service password change (verifies the current password)."""
+    await SchoolAuthService(db, redis).change_password(
+        admin, payload.current_password, payload.new_password
+    )
+    return success({"success": True})
+
+
 @router.get("/admins")
 async def list_admins(
     admin: SchoolAdmin = Depends(get_current_school_admin),
@@ -142,6 +205,57 @@ async def invite_staff(
     """Add a staff/admin to the caller's school (requires role='admin')."""
     new_admin = await SchoolAuthService(db, redis).invite_staff(admin, payload.model_dump())
     return success(_admin(new_admin))
+
+
+@router.patch("/admins/{admin_id}")
+async def manage_admin(
+    admin_id: uuid.UUID,
+    payload: SchoolAdminManageRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """Update another admin's role/name (requires role='admin')."""
+    updated = await SchoolAuthService(db, redis).manage_update(
+        admin, admin_id, payload.model_dump(exclude_unset=True)
+    )
+    return success(_admin(updated))
+
+
+@router.post("/admins/{admin_id}/deactivate")
+async def deactivate_admin(
+    admin_id: uuid.UUID,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """Deactivate an admin — blocks their login + existing tokens (requires role='admin')."""
+    updated = await SchoolAuthService(db, redis).set_active(admin, admin_id, False)
+    return success(_admin(updated))
+
+
+@router.post("/admins/{admin_id}/reactivate")
+async def reactivate_admin(
+    admin_id: uuid.UUID,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """Reactivate a deactivated admin (requires role='admin')."""
+    updated = await SchoolAuthService(db, redis).set_active(admin, admin_id, True)
+    return success(_admin(updated))
+
+
+@router.delete("/admins/{admin_id}")
+async def delete_admin(
+    admin_id: uuid.UUID,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """Hard-delete an admin (requires role='admin')."""
+    await SchoolAuthService(db, redis).delete_admin(admin, admin_id)
+    return success({"success": True})
 
 
 # --------------------------------------------------------------------------- #
