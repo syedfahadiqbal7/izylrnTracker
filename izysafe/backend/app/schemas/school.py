@@ -146,9 +146,17 @@ class EnrollmentResponse(BaseModel):
     child_id: uuid.UUID
     child_name: str
     class_grade: str | None = None
+    parent_name: str | None = None       # primary parent (the enrolling contact)
+    parent_phone: str | None = None
     parent_opt_in: bool
     bus_opt_in: bool
     enrolled_at: datetime
+
+
+class EnrollmentUpdateRequest(BaseModel):
+    """School edits the fields it owns (currently the class/grade)."""
+
+    class_grade: str | None = Field(None, max_length=50)
 
 
 class ParentEnrollmentResponse(BaseModel):

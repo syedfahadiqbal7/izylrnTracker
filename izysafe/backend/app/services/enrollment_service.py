@@ -72,30 +72,66 @@ class EnrollmentService:
 
     async def list_roster(
         self, admin: SchoolAdmin, *, class_grade: str | None, opted_in: bool | None,
-        limit: int, offset: int,
-    ) -> tuple[list[tuple[StudentEnrollment, Child]], int]:
+        q: str | None, limit: int, offset: int,
+    ) -> tuple[list[tuple[StudentEnrollment, Child, str | None, str | None]], int]:
         conditions = [StudentEnrollment.school_id == admin.school_id]
         if class_grade is not None:
             conditions.append(StudentEnrollment.class_grade == class_grade)
         if opted_in is not None:
             conditions.append(StudentEnrollment.parent_opt_in.is_(opted_in))
+        if q:
+            conditions.append(Child.name.ilike(f"%{q.strip()}%"))
 
+        base = (
+            select(StudentEnrollment, Child)
+            .join(Child, Child.id == StudentEnrollment.child_id)
+            .where(*conditions)
+        )
         total = (
-            await self.db.execute(
-                select(func.count()).select_from(StudentEnrollment).where(*conditions)
-            )
+            await self.db.execute(select(func.count()).select_from(base.subquery()))
         ).scalar_one()
         rows = (
             await self.db.execute(
-                select(StudentEnrollment, Child)
-                .join(Child, Child.id == StudentEnrollment.child_id)
-                .where(*conditions)
-                .order_by(StudentEnrollment.enrolled_at.desc())
-                .limit(limit)
-                .offset(offset)
+                base.order_by(StudentEnrollment.enrolled_at.desc()).limit(limit).offset(offset)
             )
         ).all()
-        return [(e, c) for e, c in rows], total
+
+        # Resolve each child's primary parent (name + phone) in one extra query,
+        # avoiding row multiplication from the two-primary-parents case.
+        child_ids = [c.id for _, c in rows]
+        parents: dict[uuid.UUID, tuple[str | None, str | None]] = {}
+        if child_ids:
+            for cid, name, phone in (
+                await self.db.execute(
+                    select(FamilyMember.child_id, User.name, User.phone)
+                    .join(User, User.id == FamilyMember.user_id)
+                    .where(
+                        FamilyMember.child_id.in_(child_ids),
+                        FamilyMember.is_primary.is_(True),
+                        User.deleted_at.is_(None),
+                    )
+                )
+            ).all():
+                parents.setdefault(cid, (name, phone))
+        return [(e, c, *parents.get(c.id, (None, None))) for e, c in rows], total
+
+    async def update(
+        self, admin: SchoolAdmin, enrollment_id: uuid.UUID, fields: dict[str, Any]
+    ) -> tuple[StudentEnrollment, Child]:
+        """Update the school-owned enrollment fields (class/grade)."""
+        enrollment = await self._require_own(admin, enrollment_id)
+        if "class_grade" in fields:
+            enrollment.class_grade = fields["class_grade"]
+        AuditService.log(self.db, action="enrollment.update", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="enrollment", entity_id=enrollment.id,
+                         details={"class_grade": enrollment.class_grade})
+        await self.db.commit()
+        await self.db.refresh(enrollment)
+        child = (
+            await self.db.execute(select(Child).where(Child.id == enrollment.child_id))
+        ).scalar_one()
+        return enrollment, child
 
     async def remove(self, admin: SchoolAdmin, enrollment_id: uuid.UUID) -> None:
         enrollment = await self._require_own(admin, enrollment_id)

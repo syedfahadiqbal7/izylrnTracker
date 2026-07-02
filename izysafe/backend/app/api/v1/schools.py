@@ -34,6 +34,7 @@ from app.schemas.school import (
     AuditLogResponse,
     DailyRegisterRow,
     EnrollmentResponse,
+    EnrollmentUpdateRequest,
     EnrollStudentRequest,
     ForgotPasswordRequest,
     ManualAttendanceRequest,
@@ -68,11 +69,14 @@ def _school(s: School) -> dict:
     return SchoolResponse.model_validate(s).model_dump(mode="json")
 
 
-def _enrollment(e: StudentEnrollment, child: Child) -> dict:
+def _enrollment(
+    e: StudentEnrollment, child: Child,
+    parent_name: str | None = None, parent_phone: str | None = None,
+) -> dict:
     return EnrollmentResponse(
         id=e.id, school_id=e.school_id, child_id=e.child_id, child_name=child.name,
-        class_grade=e.class_grade, parent_opt_in=e.parent_opt_in,
-        bus_opt_in=e.bus_opt_in, enrolled_at=e.enrolled_at,
+        class_grade=e.class_grade, parent_name=parent_name, parent_phone=parent_phone,
+        parent_opt_in=e.parent_opt_in, bus_opt_in=e.bus_opt_in, enrolled_at=e.enrolled_at,
     ).model_dump(mode="json")
 
 
@@ -337,19 +341,34 @@ async def enroll_student(
 async def list_roster(
     class_grade: str | None = Query(None),
     opted_in: bool | None = Query(None),
+    q: str | None = Query(None, max_length=100),   # search by student name
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     admin: SchoolAdmin = Depends(get_current_school_admin),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """The school's roster (filter by class_grade / consent status)."""
+    """The school's roster (filter by class_grade / consent status / name search)."""
     rows, total = await EnrollmentService(db).list_roster(
-        admin, class_grade=class_grade, opted_in=opted_in, limit=limit, offset=offset
+        admin, class_grade=class_grade, opted_in=opted_in, q=q, limit=limit, offset=offset
     )
     return success(
-        [_enrollment(e, c) for e, c in rows],
+        [_enrollment(e, c, pn, pp) for e, c, pn, pp in rows],
         meta={"total": total, "limit": limit, "offset": offset},
     )
+
+
+@router.patch("/students/{enrollment_id}")
+async def update_student(
+    enrollment_id: uuid.UUID,
+    payload: EnrollmentUpdateRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Edit the school-owned enrollment fields (class/grade)."""
+    enrollment, child = await EnrollmentService(db).update(
+        admin, enrollment_id, payload.model_dump(exclude_unset=True)
+    )
+    return success(_enrollment(enrollment, child))
 
 
 @router.delete("/students/{enrollment_id}")

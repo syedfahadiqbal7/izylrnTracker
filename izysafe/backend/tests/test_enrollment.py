@@ -200,6 +200,45 @@ async def test_remove_other_school_404(client, db_session):
     assert (await client.delete(f"{STUDENTS}/{eid}", headers=hdr_b)).status_code == 404
 
 
+async def test_roster_includes_parent_contact(client, db_session):
+    _, _, admin_hdr = await _school_admin(db_session)
+    parent, _, _ = await _parent_with_children(db_session, phone="+919871111111")
+    parent.name = "Meera Sharma"
+    await db_session.flush()
+    await _enroll(client, admin_hdr, "+919871111111", class_grade="5A")
+    row = (await client.get(STUDENTS, headers=admin_hdr)).json()["data"][0]
+    assert row["parent_name"] == "Meera Sharma"
+    assert row["parent_phone"] == "+919871111111"
+
+
+async def test_roster_search_by_name(client, db_session):
+    _, _, admin_hdr = await _school_admin(db_session)
+    await _parent_with_children(db_session, phone="+919872222222", names=("Aryan",))
+    await _parent_with_children(db_session, phone="+919873333333", names=("Diya",))
+    await _enroll(client, admin_hdr, "+919872222222")
+    await _enroll(client, admin_hdr, "+919873333333")
+    data = (await client.get(f"{STUDENTS}?q=ary", headers=admin_hdr)).json()["data"]
+    assert len(data) == 1 and data[0]["child_name"] == "Aryan"
+
+
+async def test_update_class_grade(client, db_session):
+    _, _, admin_hdr = await _school_admin(db_session)
+    await _parent_with_children(db_session, phone="+919874444444")
+    eid = (await _enroll(client, admin_hdr, "+919874444444", class_grade="5A")).json()["data"]["id"]
+    resp = await client.patch(f"{STUDENTS}/{eid}", headers=admin_hdr, json={"class_grade": "6B"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["class_grade"] == "6B"
+
+
+async def test_update_other_school_404(client, db_session):
+    _, _, hdr_a = await _school_admin(db_session, name="A")
+    _, _, hdr_b = await _school_admin(db_session, name="B")
+    await _parent_with_children(db_session, phone="+919875555555")
+    eid = (await _enroll(client, hdr_a, "+919875555555")).json()["data"]["id"]
+    resp = await client.patch(f"{STUDENTS}/{eid}", headers=hdr_b, json={"class_grade": "9Z"})
+    assert resp.status_code == 404
+
+
 # --------------------------------------------------------------------------- #
 # Parent-side consent
 # --------------------------------------------------------------------------- #
