@@ -40,6 +40,52 @@ class DriverResponse(BaseModel):
     created_at: datetime
 
 
+# ------------------------------------------------------- live fleet (map view)
+class BusLivePosition(BaseModel):
+    lat: float
+    lng: float
+    timestamp: str | None = None
+
+
+class BusLiveStop(BaseModel):
+    id: uuid.UUID
+    name: str
+    lat: float
+    lng: float
+    seq: int
+
+
+class BusLiveRoute(BaseModel):
+    id: uuid.UUID
+    name: str
+    active: bool
+    students: int
+    stops: list[BusLiveStop]
+
+
+class BusLiveDriver(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class BusLiveTrip(BaseModel):
+    active: bool
+    started_at: datetime | None = None
+
+
+class FleetBusResponse(BaseModel):
+    bus_id: uuid.UUID
+    bus_name: str
+    imei: str | None = None
+    traccar_id: int | None = None
+    online: bool
+    last_seen: datetime | None = None
+    position: BusLivePosition | None = None
+    route: BusLiveRoute | None = None
+    driver: BusLiveDriver | None = None
+    trip: BusLiveTrip | None = None
+
+
 # ------------------------------------------------------------------- routes
 class RouteCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)

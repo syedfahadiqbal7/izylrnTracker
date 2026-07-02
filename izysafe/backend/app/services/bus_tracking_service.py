@@ -23,7 +23,7 @@ from collections.abc import Callable
 from datetime import datetime, timezone
 
 from redis.asyncio import Redis
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import redis_keys as rk
@@ -31,7 +31,16 @@ from app.core.config import settings
 from app.core.errors import APIException
 from app.core.geometry import haversine_m
 from app.models.child import Child
-from app.models.school import BusAssignment, BusRoute, BusRouteStop, StudentEnrollment
+from app.models.device import Device
+from app.models.school import (
+    BusAssignment,
+    BusRoute,
+    BusRouteStop,
+    BusTrip,
+    Driver,
+    SchoolAdmin,
+    StudentEnrollment,
+)
 from app.services.alert_service import AlertService
 from app.services.children_service import ChildrenService
 from app.services.fcm_gateway import FcmGateway
@@ -164,3 +173,100 @@ class BusLiveService:
             "stop_id": stop.id if stop else None,
             "stop_name": stop.name if stop else None, "eta_minutes": eta,
         }
+
+    async def fleet(self, admin: SchoolAdmin) -> list[dict]:
+        """School-wide live view: every bus device with its cached position + online
+        state, plus its route/driver/stops/roster-count and any active trip."""
+        buses = (
+            await self.db.execute(
+                select(Device).where(
+                    Device.school_id == admin.school_id,
+                    Device.device_type == "bus",
+                    Device.deleted_at.is_(None),
+                )
+            )
+        ).scalars().all()
+        routes = (
+            await self.db.execute(
+                select(BusRoute).where(BusRoute.school_id == admin.school_id)
+            )
+        ).scalars().all()
+        route_by_device = {r.device_id: r for r in routes if r.device_id is not None}
+        route_ids = [r.id for r in routes]
+
+        drivers: dict[uuid.UUID, Driver] = {}
+        driver_ids = {r.driver_id for r in routes if r.driver_id is not None}
+        if driver_ids:
+            for d in (
+                await self.db.execute(select(Driver).where(Driver.id.in_(driver_ids)))
+            ).scalars().all():
+                drivers[d.id] = d
+
+        stops_by_route: dict[uuid.UUID, list[BusRouteStop]] = {}
+        counts: dict[uuid.UUID, int] = {}
+        trips: dict[uuid.UUID, BusTrip] = {}
+        if route_ids:
+            for s in (
+                await self.db.execute(
+                    select(BusRouteStop)
+                    .where(BusRouteStop.route_id.in_(route_ids))
+                    .order_by(BusRouteStop.seq)
+                )
+            ).scalars().all():
+                stops_by_route.setdefault(s.route_id, []).append(s)
+            for rid, cnt in (
+                await self.db.execute(
+                    select(BusAssignment.route_id, func.count())
+                    .where(BusAssignment.route_id.in_(route_ids))
+                    .group_by(BusAssignment.route_id)
+                )
+            ).all():
+                counts[rid] = cnt
+            for t in (
+                await self.db.execute(
+                    select(BusTrip).where(
+                        BusTrip.route_id.in_(route_ids), BusTrip.status == "active"
+                    )
+                )
+            ).scalars().all():
+                trips[t.route_id] = t
+
+        out: list[dict] = []
+        for bus in buses:
+            position = None
+            cached = await self.redis.get(rk.loc_device_latest(bus.id))
+            if cached:
+                d = json.loads(cached)
+                position = {"lat": d["lat"], "lng": d["lng"], "timestamp": d.get("ts")}
+            online = (await self.redis.get(rk.device_online(bus.id))) is not None
+            last_seen = None
+            ls = await self.redis.get(rk.device_lastseen(bus.id))
+            if ls:
+                try:
+                    last_seen = datetime.fromtimestamp(float(ls), tz=timezone.utc)
+                except (ValueError, TypeError):
+                    last_seen = None
+
+            route = route_by_device.get(bus.id)
+            route_out = driver_out = trip_out = None
+            if route is not None:
+                drv = drivers.get(route.driver_id) if route.driver_id else None
+                if drv is not None:
+                    driver_out = {"id": drv.id, "name": drv.name}
+                route_out = {
+                    "id": route.id, "name": route.name, "active": route.active,
+                    "students": counts.get(route.id, 0),
+                    "stops": [
+                        {"id": s.id, "name": s.name, "lat": s.lat, "lng": s.lng, "seq": s.seq}
+                        for s in stops_by_route.get(route.id, [])
+                    ],
+                }
+                tr = trips.get(route.id)
+                trip_out = {"active": tr is not None, "started_at": tr.started_at if tr else None}
+
+            out.append({
+                "bus_id": bus.id, "bus_name": bus.name, "imei": bus.imei,
+                "traccar_id": bus.traccar_id, "online": online, "last_seen": last_seen,
+                "position": position, "route": route_out, "driver": driver_out, "trip": trip_out,
+            })
+        return out

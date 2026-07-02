@@ -9,11 +9,13 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_school_admin
 from app.core.database import get_db
 from app.core.errors import success
+from app.core.redis import get_redis
 from app.models.child import Child
 from app.models.device import Device
 from app.models.school import BusAssignment, BusRoute, BusRouteStop, Driver, SchoolAdmin
@@ -22,6 +24,7 @@ from app.schemas.bus import (
     AssignmentResponse,
     BusDeviceCreate,
     BusDeviceResponse,
+    FleetBusResponse,
     DriverCreate,
     DriverResponse,
     DriverSetCodeRequest,
@@ -34,6 +37,7 @@ from app.schemas.bus import (
     StopUpdate,
 )
 from app.services.bus_service import BusService
+from app.services.bus_tracking_service import BusLiveService
 
 router = APIRouter(prefix="/schools", tags=["bus"])
 
@@ -82,6 +86,18 @@ async def list_buses(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     return success([_bus(b) for b in await BusService(db).list_buses(admin)])
+
+
+@router.get("/buses/live")
+async def live_buses(
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """Live fleet view for the map: every bus's cached position + online state,
+    with its route/driver/stops/roster-count and any active trip."""
+    fleet = await BusLiveService(db, redis).fleet(admin)
+    return success([FleetBusResponse(**b).model_dump(mode="json") for b in fleet])
 
 
 @router.delete("/buses/{device_id}")

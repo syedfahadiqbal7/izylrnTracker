@@ -178,6 +178,39 @@ async def test_live_bus_non_member_404(client, db_session, auth_headers):
 
 
 # --------------------------------------------------------------------------- #
+# School fleet live view (map)
+# --------------------------------------------------------------------------- #
+async def test_fleet_live(client, db_session, redis_client):
+    s = await _full_setup(db_session)
+    await redis_client.set(rk.loc_device_latest(s["bus"].id),
+                           json.dumps({"lat": 18.60, "lng": 73.90, "ts": "2026-06-17T09:00:00+00:00"}))
+    await redis_client.set(rk.device_online(s["bus"].id), "1")
+    resp = await client.get("/api/v1/schools/buses/live", headers=s["hdr"])
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert len(data) == 1
+    b = data[0]
+    assert b["online"] is True
+    assert b["position"]["lat"] == 18.60
+    assert b["route"]["name"] == "R1"
+    assert b["route"]["students"] == 1
+    assert len(b["route"]["stops"]) == 1
+    assert b["route"]["stops"][0]["name"] == "Main Gate"
+
+
+async def test_fleet_offline_no_position(client, db_session, redis_client):
+    s = await _full_setup(db_session)  # no redis keys set → offline, no fix
+    b = (await client.get("/api/v1/schools/buses/live", headers=s["hdr"])).json()["data"][0]
+    assert b["online"] is False and b["position"] is None
+
+
+async def test_fleet_tenant_isolation(client, db_session):
+    s = await _full_setup(db_session)
+    _, _, hdr_b = await _admin(db_session, name="Other School")
+    assert (await client.get("/api/v1/schools/buses/live", headers=hdr_b)).json()["data"] == []
+
+
+# --------------------------------------------------------------------------- #
 # Webhook bus-position branch
 # --------------------------------------------------------------------------- #
 def _pos(traccar_id, imei, lat, lng):
