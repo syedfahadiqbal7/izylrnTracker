@@ -20,10 +20,13 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # IF NOT EXISTS: `schema.sql` (executed by migration 0001) already carries this column,
+    # so a fresh `alembic upgrade head` must no-op here rather than fail on a duplicate.
     op.execute(
-        "ALTER TABLE devices ADD COLUMN watch_removed_enabled BOOLEAN NOT NULL DEFAULT FALSE"
+        "ALTER TABLE devices ADD COLUMN IF NOT EXISTS watch_removed_enabled "
+        "BOOLEAN NOT NULL DEFAULT FALSE"
     )
 
 
 def downgrade() -> None:
-    op.execute("ALTER TABLE devices DROP COLUMN watch_removed_enabled")
+    op.execute("ALTER TABLE devices DROP COLUMN IF EXISTS watch_removed_enabled")

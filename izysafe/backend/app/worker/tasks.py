@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import NullPool
 
 from app.core.config import settings
+from app.services.attendance_service import AttendanceEngine
 from app.services.fcm_gateway import FcmGateway
 from app.services.maintenance_service import PartitionService, PurgeService
 from app.services.subscription_expiry_service import SubscriptionExpiryService
@@ -48,3 +49,8 @@ def partition_rollforward() -> list[str]:
 @celery_app.task(name="izysafe.maintenance.soft_delete_purge")
 def soft_delete_purge() -> dict[str, int]:
     return _run(lambda factory: PurgeService(factory).run())
+
+
+@celery_app.task(name="izysafe.attendance.absent_sweep")
+def attendance_absent_sweep() -> int:
+    return _run(lambda factory: AttendanceEngine(factory).sweep_absent())

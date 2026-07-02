@@ -4,14 +4,18 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.core.errors import success
+from app.core.redis import get_redis
 from app.models.child import Child, FamilyMember
 from app.models.user import User
+from app.schemas.bus import BusLiveResponse
 from app.schemas.child import ChildCreate, ChildPermissions, ChildResponse, ChildUpdate
+from app.services.bus_tracking_service import BusLiveService
 from app.services.children_service import ChildrenService
 
 router = APIRouter(prefix="/children", tags=["children"])
@@ -51,6 +55,19 @@ async def list_children(
     """List all children the user can see, with device counts."""
     rows = await ChildrenService(db).list_children(current_user)
     return success([_serialize(c, fm, n) for c, fm, n in rows])
+
+
+@router.get("/{child_id}/bus")
+async def child_bus(
+    child_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """Live bus location + the child's stop + a straight-line ETA (F28). Requires the
+    child's bus_opt_in; 404 otherwise."""
+    data = await BusLiveService(db, redis).live_bus(current_user, child_id)
+    return success(BusLiveResponse(**data).model_dump(mode="json"))
 
 
 @router.get("/{child_id}")

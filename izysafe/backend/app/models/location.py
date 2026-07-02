@@ -102,6 +102,10 @@ class Geofence(Base, UUIDPkMixin, TimestampMixin, UpdatedAtMixin):
     active_from: Mapped[datetime | None] = mapped_column(Time)
     active_to: Mapped[datetime | None] = mapped_column(Time)
     active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    # Attendance anchor (F27, Sprint 8): the school this zone marks arrivals for.
+    school_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("schools.id", ondelete="SET NULL")
+    )
 
     child: Mapped["Child"] = relationship(back_populates="geofences")  # noqa: F821
 

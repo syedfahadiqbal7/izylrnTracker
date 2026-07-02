@@ -13,7 +13,7 @@ _ALERT_TYPES = (
     "sos","geofence_enter","geofence_exit","low_battery","critical_battery",
     "device_offline","speed","watch_removed","route_deviation","pickup",
     "school_arrival","school_absent","crash","anomaly","chat_reply",
-    "family_join","system",
+    "family_join","system","bus_arrival",
 )
 
 

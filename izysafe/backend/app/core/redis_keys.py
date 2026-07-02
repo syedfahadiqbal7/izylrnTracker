@@ -136,6 +136,16 @@ def call_active(child_id: uuid.UUID | str) -> str:
     return f"call:{child_id}:active"
 
 
+def bus_stop_debounce(route_id: uuid.UUID | str, stop_id: uuid.UUID | str) -> str:
+    """Anti-repeat marker after a bus_arrival fires for a route+stop (F28, 5 min)."""
+    return f"bus_stop_debounce:{route_id}:{stop_id}"
+
+
+def school_login_rate(email: str) -> str:
+    """Per-email failed-login counter (school-admin brute-force guard, Sprint 8)."""
+    return f"rate:schoollogin:{email.lower()}"
+
+
 def gateway_event(gateway: str, event_id: str) -> str:
     """Idempotency marker for a processed payment-gateway webhook event (Sprint 6);
     dedups gateway retries so activation alerts don't double-fire."""

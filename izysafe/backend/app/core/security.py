@@ -58,9 +58,9 @@ def create_access_token(user_id: str, extra: dict[str, Any] | None = None) -> st
     )
 
 
-def create_refresh_token(user_id: str) -> str:
+def create_refresh_token(user_id: str, extra: dict[str, Any] | None = None) -> str:
     return _create_token(
-        user_id, "refresh", timedelta(days=settings.jwt_refresh_expire_days)
+        user_id, "refresh", timedelta(days=settings.jwt_refresh_expire_days), extra
     )
 
 

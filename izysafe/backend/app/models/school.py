@@ -20,7 +20,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UpdatedAtMixin, UUIDPkMixin
@@ -36,6 +36,10 @@ class School(Base, UUIDPkMixin, TimestampMixin, UpdatedAtMixin):
     late_until: Mapped[time] = mapped_column(Time, nullable=False, server_default=text("'11:00'"))
     arrival_window_from: Mapped[time] = mapped_column(
         Time, nullable=False, server_default=text("'07:00'")
+    )
+    # Weekdays school is in session (ISO 1=Mon..7=Sun) — the absent sweep skips the rest.
+    school_days: Mapped[list[int]] = mapped_column(
+        ARRAY(Integer), nullable=False, server_default=text("ARRAY[1,2,3,4,5]")
     )
 
 
