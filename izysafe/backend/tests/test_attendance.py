@@ -291,3 +291,125 @@ async def test_attendance_tenant_isolation(client, db_session):
     # Admin B's register for the same date sees only their own (empty) school.
     resp = await client.get(f"/api/v1/schools/attendance?date={DAY.isoformat()}", headers=hdr_b)
     assert all(r["child_id"] != str(child_a.id) for r in resp.json()["data"])
+
+
+# --------------------------------------------------------------------------- #
+# Reporting & export (Slice 3)
+# --------------------------------------------------------------------------- #
+REPORT = "/api/v1/schools/attendance/report"
+EXPORT = "/api/v1/schools/attendance/export"
+D1 = date(2026, 6, 15)   # Mon
+D2 = date(2026, 6, 16)   # Tue
+# DAY = 2026-06-17 (Wed)
+
+
+async def _add_records(db, school_id, child_id, statuses, *, manually=False):
+    """statuses: {date: status} → seed attendance_records directly."""
+    for d, st in statuses.items():
+        db.add(AttendanceRecord(
+            school_id=school_id, child_id=child_id, date=d, status=st, marked_manually=manually,
+        ))
+    await db.flush()
+
+
+async def _staff(db, school_id):
+    staff = SchoolAdmin(
+        school_id=school_id, email=f"st-{uuid.uuid4().hex[:8]}@s.test",
+        password_hash=hash_secret("password123"), role="staff", active=True,
+    )
+    db.add(staff)
+    await db.flush()
+    hdr = {"Authorization": f"Bearer {create_access_token(str(staff.id), extra={'scope': 'school_admin'})}"}
+    return staff, hdr
+
+
+async def test_report_summary_and_rollup(client, db_session):
+    school, _, child, _, hdr = await _setup(db_session)
+    await _add_records(db_session, school.id, child.id, {D1: "on_time", D2: "absent", DAY: "late"})
+    resp = await client.get(f"{REPORT}?from={D1.isoformat()}&to={DAY.isoformat()}", headers=hdr)
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    s = data["summary"]
+    assert s["records"] == 3 and s["students"] == 1
+    assert s["by_status"]["on_time"] == 1
+    assert s["by_status"]["late"] == 1
+    assert s["by_status"]["absent"] == 1
+    assert s["present_rate"] == round(2 / 3, 3)  # (on_time+late) / 3
+    ps = data["per_student"][0]
+    assert ps["child_name"] == "Aryan"
+    assert ps["present_days"] == 2 and ps["total_days"] == 3
+    assert ps["rate"] == round(2 / 3, 3)
+
+
+async def test_report_class_grade_filter(client, db_session):
+    school, _, child, _, hdr = await _setup(db_session)
+    await _add_records(db_session, school.id, child.id, {D1: "on_time"})
+    match = await client.get(
+        f"{REPORT}?from={D1.isoformat()}&to={DAY.isoformat()}&class_grade=5A", headers=hdr
+    )
+    assert match.json()["data"]["summary"]["records"] == 1
+    miss = await client.get(
+        f"{REPORT}?from={D1.isoformat()}&to={DAY.isoformat()}&class_grade=9Z", headers=hdr
+    )
+    assert miss.json()["data"]["summary"]["records"] == 0
+    assert miss.json()["data"]["per_student"] == []
+
+
+async def test_report_staff_role_allowed(client, db_session):
+    school, _, child, _, _ = await _setup(db_session)  # R4: staff may read reports
+    _, staff_hdr = await _staff(db_session, school.id)
+    await _add_records(db_session, school.id, child.id, {D1: "on_time"})
+    resp = await client.get(f"{REPORT}?from={D1.isoformat()}&to={DAY.isoformat()}", headers=staff_hdr)
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["data"]["summary"]["records"] == 1
+
+
+async def test_report_invalid_range(client, db_session):
+    school, _, _, _, hdr = await _setup(db_session)
+    resp = await client.get(f"{REPORT}?from={DAY.isoformat()}&to={D1.isoformat()}", headers=hdr)
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "INVALID_RANGE"
+
+
+async def test_report_range_too_large(client, db_session):
+    school, _, _, _, hdr = await _setup(db_session)
+    far = date(2028, 1, 1)  # > 366 days after D1
+    resp = await client.get(f"{REPORT}?from={D1.isoformat()}&to={far.isoformat()}", headers=hdr)
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "RANGE_TOO_LARGE"
+
+
+async def test_report_tenant_isolation(client, db_session):
+    school_a, _, child_a, _, _ = await _setup(db_session)
+    _, _, _, _, hdr_b = await _setup(db_session)
+    await _add_records(db_session, school_a.id, child_a.id, {D1: "on_time"})
+    resp = await client.get(f"{REPORT}?from={D1.isoformat()}&to={DAY.isoformat()}", headers=hdr_b)
+    assert resp.json()["data"]["summary"]["records"] == 0
+
+
+async def test_export_csv(client, db_session):
+    school, _, child, _, hdr = await _setup(db_session)
+    await _add_records(db_session, school.id, child.id, {D1: "on_time", D2: "absent"})
+    resp = await client.get(f"{EXPORT}?from={D1.isoformat()}&to={D2.isoformat()}", headers=hdr)
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"].startswith("text/csv")
+    assert "attachment" in resp.headers["content-disposition"]
+    lines = resp.text.strip().splitlines()
+    assert lines[0].startswith("date,child_id,child_name,class_grade,status")
+    assert len(lines) == 3  # header + 2 records
+    assert "Aryan" in resp.text
+    assert "5A" in resp.text
+
+
+async def test_export_empty_school_header_only(client, db_session):
+    school, _, _, _, hdr = await _setup(db_session)
+    resp = await client.get(f"{EXPORT}?from={D1.isoformat()}&to={D2.isoformat()}", headers=hdr)
+    assert resp.status_code == 200
+    assert len(resp.text.strip().splitlines()) == 1  # header only
+
+
+async def test_export_invalid_range(client, db_session):
+    school, _, _, _, hdr = await _setup(db_session)
+    resp = await client.get(f"{EXPORT}?from={DAY.isoformat()}&to={D1.isoformat()}", headers=hdr)
+    assert resp.status_code == 422
+    assert resp.json()["code"] == "INVALID_RANGE"

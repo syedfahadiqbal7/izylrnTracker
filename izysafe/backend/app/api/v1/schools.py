@@ -7,10 +7,12 @@ writes + staff invites require role='admin'.
 """
 from __future__ import annotations
 
+import csv
+import io
 import uuid
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Query, Request, Response
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -28,6 +30,7 @@ from app.models.school import School, SchoolAdmin, StudentEnrollment
 from app.schemas.auth import LogoutRequest, RefreshRequest
 from app.schemas.school import (
     AttendanceRecordResponse,
+    AttendanceReportResponse,
     AuditLogResponse,
     DailyRegisterRow,
     EnrollmentResponse,
@@ -385,6 +388,45 @@ async def daily_register(
     """The daily register: every consented student's status for a date."""
     rows = await AttendanceService(db).daily_register(admin, date_, class_grade)
     return success([DailyRegisterRow(**r).model_dump(mode="json") for r in rows])
+
+
+@router.get("/attendance/report")
+async def attendance_report(
+    date_from: date = Query(..., alias="from"),
+    date_to: date = Query(..., alias="to"),
+    class_grade: str | None = Query(None),
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Date-range attendance summary + per-student rollup (admin or staff; R4)."""
+    report = await AttendanceService(db).report(admin, date_from, date_to, class_grade)
+    return success(AttendanceReportResponse(**report).model_dump(mode="json"))
+
+
+@router.get("/attendance/export")
+async def attendance_export(
+    date_from: date = Query(..., alias="from"),
+    date_to: date = Query(..., alias="to"),
+    class_grade: str | None = Query(None),
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Flat per-record attendance register as a CSV download (R3)."""
+    rows = await AttendanceService(db).export_rows(admin, date_from, date_to, class_grade)
+    fields = [
+        "date", "child_id", "child_name", "class_grade", "status",
+        "arrival_time", "departure_time", "total_hours", "marked_manually",
+    ]
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=fields)
+    writer.writeheader()
+    writer.writerows(rows)
+    filename = f"attendance_{date_from.isoformat()}_{date_to.isoformat()}.csv"
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/students/{enrollment_id}/attendance")
