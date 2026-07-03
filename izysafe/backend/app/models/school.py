@@ -30,6 +30,9 @@ class School(Base, UUIDPkMixin, TimestampMixin, UpdatedAtMixin):
     __tablename__ = "schools"
 
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    address: Mapped[str | None] = mapped_column(String(300))
+    contact_phone: Mapped[str | None] = mapped_column(String(20))
+    contact_email: Mapped[str | None] = mapped_column(String(255))
     timezone: Mapped[str] = mapped_column(String(64), nullable=False, server_default="Asia/Kolkata")
     holidays: Mapped[list | dict | None] = mapped_column(JSONB)
     on_time_before: Mapped[time] = mapped_column(Time, nullable=False, server_default=text("'09:00'"))

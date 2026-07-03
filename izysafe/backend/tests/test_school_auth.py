@@ -283,11 +283,16 @@ async def test_update_school_config_by_admin(client, db_session):
     school = await _school(db_session)
     admin = await _admin(db_session, school, role="admin")
     resp = await client.put("/api/v1/schools/me", headers=_headers(admin),
-                            json={"on_time_before": "08:30:00", "holidays": ["2026-08-15"]})
+                            json={"on_time_before": "08:30:00", "holidays": ["2026-08-15"],
+                                  "address": "12 MG Road, Pune", "contact_phone": "+912012345678",
+                                  "contact_email": "office@greenvalley.edu"})
     assert resp.status_code == 200, resp.text
     data = resp.json()["data"]
     assert data["on_time_before"] == "08:30:00"
     assert data["holidays"] == ["2026-08-15"]
+    assert data["address"] == "12 MG Road, Pune"
+    assert data["contact_phone"] == "+912012345678"
+    assert data["contact_email"] == "office@greenvalley.edu"
 
 
 async def test_update_school_requires_admin(client, db_session):

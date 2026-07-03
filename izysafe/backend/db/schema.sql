@@ -591,6 +591,9 @@ CREATE TABLE translations (
 CREATE TABLE schools (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name        VARCHAR(200) NOT NULL,
+    address       VARCHAR(300),                         -- school profile (Sprint 10, migration 0010)
+    contact_phone VARCHAR(20),
+    contact_email VARCHAR(255),
     timezone    VARCHAR(64) NOT NULL DEFAULT 'Asia/Kolkata',
     holidays    JSONB,                                  -- ["2026-08-15", ...]
     -- Attendance status thresholds (configurable per school, F27)

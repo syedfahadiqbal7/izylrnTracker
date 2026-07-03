@@ -99,6 +99,9 @@ class SchoolResponse(BaseModel):
 
     id: uuid.UUID
     name: str
+    address: str | None = None
+    contact_phone: str | None = None
+    contact_email: str | None = None
     timezone: str
     holidays: list | None = None
     on_time_before: time
@@ -110,6 +113,9 @@ class SchoolResponse(BaseModel):
 
 class SchoolUpdateRequest(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
+    address: str | None = Field(None, max_length=300)
+    contact_phone: str | None = Field(None, max_length=20)
+    contact_email: str | None = Field(None, max_length=255)
     timezone: str | None = Field(None, max_length=64)
     holidays: list[str] | None = None            # ["2026-08-15", ...] ISO dates
     on_time_before: time | None = None
