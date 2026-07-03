@@ -1,5 +1,6 @@
 /** Driver management data hooks (school-admin side, /schools/drivers/*). */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
 
 export interface Driver {
@@ -38,7 +39,10 @@ export function useCreateDriver() {
         phone: input.phone || null,
         access_code: input.access_code || null,
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: (d) => {
+      toast.success(`Driver "${d.name}" added`);
+      qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
 
@@ -47,7 +51,10 @@ export function useSetActive() {
   return useMutation({
     mutationFn: ({ id, active }: { id: string; active: boolean }) =>
       apiPut<Driver>(`/schools/drivers/${id}`, { active }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: (_d, v) => {
+      toast.success(v.active ? "Driver reactivated" : "Driver deactivated");
+      qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
 
@@ -56,7 +63,10 @@ export function useSetDriverCode() {
   return useMutation({
     mutationFn: ({ id, access_code }: { id: string; access_code: string }) =>
       apiPost<Driver>(`/schools/drivers/${id}/set-code`, { access_code }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      toast.success("Access code saved");
+      qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
 
@@ -64,7 +74,10 @@ export function useDeleteDriver() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiDelete(`/schools/drivers/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: KEY }),
+    onSuccess: () => {
+      toast.success("Driver deleted");
+      qc.invalidateQueries({ queryKey: KEY });
+    },
   });
 }
 

@@ -5,6 +5,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
 
 export interface Route {
@@ -71,7 +72,8 @@ export function useCreateRoute() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: RouteInput) => apiPost<Route>("/schools/routes", input),
-    onSuccess: () => {
+    onSuccess: (r) => {
+      toast.success(`Route "${r.name}" created`);
       qc.invalidateQueries({ queryKey: ["routes"] });
       invalidateFleet(qc);
     },
@@ -95,6 +97,7 @@ export function useDeleteRoute() {
   return useMutation({
     mutationFn: (id: string) => apiDelete(`/schools/routes/${id}`),
     onSuccess: () => {
+      toast.success("Route deleted");
       qc.invalidateQueries({ queryKey: ["routes"] });
       invalidateFleet(qc);
     },
@@ -171,7 +174,8 @@ export function useAssignStudent() {
         enrollment_id,
         stop_id: stop_id || null,
       }),
-    onSuccess: () => {
+    onSuccess: (a) => {
+      toast.success(`${a.child_name} assigned`);
       qc.invalidateQueries({ queryKey: ["assignments"] });
       invalidateFleet(qc);
     },
@@ -184,6 +188,7 @@ export function useUnassign() {
     mutationFn: (assignmentId: string) =>
       apiDelete(`/schools/assignments/${assignmentId}`),
     onSuccess: () => {
+      toast.success("Student removed from route");
       qc.invalidateQueries({ queryKey: ["assignments"] });
       invalidateFleet(qc);
     },
@@ -211,7 +216,8 @@ export function useRegisterBus() {
         imei: input.imei,
         traccar_id: input.traccar_id ?? null,
       }),
-    onSuccess: () => {
+    onSuccess: (b) => {
+      toast.success(`Bus "${b.name}" registered`);
       qc.invalidateQueries({ queryKey: ["buses"] });
       invalidateFleet(qc);
     },
@@ -223,6 +229,7 @@ export function useDeleteBus() {
   return useMutation({
     mutationFn: (id: string) => apiDelete(`/schools/buses/${id}`),
     onSuccess: () => {
+      toast.success("Bus deleted");
       qc.invalidateQueries({ queryKey: ["buses"] });
       qc.invalidateQueries({ queryKey: ["routes"] });
       invalidateFleet(qc);

@@ -1,9 +1,12 @@
 import {
+  Bus,
   ClipboardCheck,
   FileBarChart,
   MapPin,
-  Truck,
+  Navigation,
+  UserCheck,
   Users,
+  UserX,
   type LucideIcon,
 } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -17,6 +20,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useDashboardStats } from "@/features/dashboard/api";
 
 interface Shortcut {
   title: string;
@@ -48,13 +53,15 @@ const SHORTCUTS: Shortcut[] = [
     title: "Drivers",
     description: "Manage bus drivers and their trip activity.",
     to: "/drivers",
-    icon: Truck,
+    icon: Bus,
   },
 ];
 
 export function DashboardPage() {
   const { admin } = useAuth();
+  const stats = useDashboardStats();
   const greetingName = admin?.name ?? admin?.email ?? "";
+  const s = stats.data;
 
   return (
     <>
@@ -63,7 +70,7 @@ export function DashboardPage() {
         description={`Welcome back${greetingName ? `, ${greetingName}` : ""}.`}
       />
 
-      {/* Live tracking hero — the primary thing an admin should reach */}
+      {/* Live tracking hero */}
       <Link to="/tracking" className="group mb-6 block">
         <Card className="overflow-hidden border-0 bg-brand-gradient text-white shadow-md transition-shadow group-hover:shadow-lg">
           <CardContent className="flex flex-col items-start justify-between gap-4 py-6 sm:flex-row sm:items-center">
@@ -74,7 +81,7 @@ export function DashboardPage() {
               <div>
                 <h2 className="text-lg font-semibold">Live Tracking</h2>
                 <p className="text-sm text-white/85">
-                  See where every school bus is, in real time.
+                  See where every school bus and student is, in real time.
                 </p>
               </div>
             </div>
@@ -88,6 +95,47 @@ export function DashboardPage() {
         </Card>
       </Link>
 
+      {/* Live stats */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label="Buses online"
+          value={s ? `${s.buses_online}/${s.buses_total}` : undefined}
+          hint={s?.active_trips ? `${s.active_trips} on active trips` : "of your fleet"}
+          icon={Bus}
+          accent="text-primary"
+          to="/tracking"
+          loading={stats.isLoading}
+        />
+        <StatCard
+          label="Present today"
+          value={s ? String(s.students_present) : undefined}
+          hint={s ? `of ${s.consented} consented` : undefined}
+          icon={UserCheck}
+          accent="text-emerald-600"
+          to="/attendance"
+          loading={stats.isLoading}
+        />
+        <StatCard
+          label="Pending consents"
+          value={s ? String(s.pending_consents) : undefined}
+          hint="awaiting parent opt-in"
+          icon={UserX}
+          accent="text-amber-600"
+          to="/roster"
+          loading={stats.isLoading}
+        />
+        <StatCard
+          label="Active trips"
+          value={s ? String(s.active_trips) : undefined}
+          hint={s ? `${s.buses_total} buses` : undefined}
+          icon={Navigation}
+          accent="text-brand-violet"
+          to="/tracking"
+          loading={stats.isLoading}
+        />
+      </div>
+
+      {/* Quick links */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {SHORTCUTS.map(({ title, description, to, icon: Icon }) => (
           <Link key={to} to={to} className="group">
@@ -107,21 +155,47 @@ export function DashboardPage() {
           </Link>
         ))}
       </div>
+    </>
+  );
+}
 
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="text-base">Getting started</CardTitle>
-          <CardDescription>
-            This is the initial panel shell. Pages are being built out
-            slice-by-slice — attendance reporting/export is next, wired to the
-            Sprint 10 backend endpoints.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          Signed in as <span className="font-medium">{admin?.email}</span> (
-          {admin?.role}).
+function StatCard({
+  label,
+  value,
+  hint,
+  icon: Icon,
+  accent,
+  to,
+  loading,
+}: {
+  label: string;
+  value: string | undefined;
+  hint?: string;
+  icon: LucideIcon;
+  accent: string;
+  to: string;
+  loading: boolean;
+}) {
+  return (
+    <Link to={to} className="group">
+      <Card className="transition-colors group-hover:border-primary/40">
+        <CardContent className="flex items-center justify-between pt-6">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">{label}</p>
+            {loading || value === undefined ? (
+              <Skeleton className="mt-1 h-8 w-16" />
+            ) : (
+              <p className="mt-0.5 text-3xl font-semibold tracking-tight">
+                {value}
+              </p>
+            )}
+            {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+          </div>
+          <div className="flex size-10 items-center justify-center rounded-lg bg-muted">
+            <Icon className={`size-5 ${accent}`} />
+          </div>
         </CardContent>
       </Card>
-    </>
+    </Link>
   );
 }

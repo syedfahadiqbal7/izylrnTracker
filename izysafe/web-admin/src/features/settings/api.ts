@@ -1,5 +1,6 @@
 /** Settings data hooks: school config update + admin/staff management. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from "@/lib/api";
 import type { School } from "@/features/school/api";
 
@@ -33,7 +34,10 @@ export function useUpdateSchool() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: SchoolUpdate) => apiPut<School>("/schools/me", input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["school-me"] }),
+    onSuccess: () => {
+      toast.success("Settings saved");
+      qc.invalidateQueries({ queryKey: ["school-me"] });
+    },
   });
 }
 
@@ -41,6 +45,7 @@ export function useUpdateSchool() {
 export function useUpdateMyName() {
   return useMutation({
     mutationFn: (name: string) => apiPatch("/schools/admins/me", { name }),
+    onSuccess: () => toast.success("Profile updated"),
   });
 }
 
@@ -48,6 +53,7 @@ export function useChangePassword() {
   return useMutation({
     mutationFn: (body: { current_password: string; new_password: string }) =>
       apiPost("/schools/admins/me/password", body),
+    onSuccess: () => toast.success("Password updated"),
   });
 }
 
@@ -68,7 +74,10 @@ export function useInviteStaff() {
       name?: string;
       role: AdminRole;
     }) => apiPost<SchoolAdminRow>("/schools/admins", body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admins"] }),
+    onSuccess: (a) => {
+      toast.success(`${a.email} added`);
+      qc.invalidateQueries({ queryKey: ["admins"] });
+    },
   });
 }
 
@@ -83,7 +92,10 @@ export function useManageAdmin() {
       role?: AdminRole;
       name?: string;
     }) => apiPatch<SchoolAdminRow>(`/schools/admins/${id}`, body),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admins"] }),
+    onSuccess: () => {
+      toast.success("Member updated");
+      qc.invalidateQueries({ queryKey: ["admins"] });
+    },
   });
 }
 
@@ -94,7 +106,10 @@ export function useSetAdminActive() {
       apiPost<SchoolAdminRow>(
         `/schools/admins/${id}/${active ? "reactivate" : "deactivate"}`,
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admins"] }),
+    onSuccess: (_a, v) => {
+      toast.success(v.active ? "Member reactivated" : "Member deactivated");
+      qc.invalidateQueries({ queryKey: ["admins"] });
+    },
   });
 }
 
@@ -102,6 +117,9 @@ export function useDeleteAdmin() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiDelete(`/schools/admins/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["admins"] }),
+    onSuccess: () => {
+      toast.success("Member removed");
+      qc.invalidateQueries({ queryKey: ["admins"] });
+    },
   });
 }

@@ -1,17 +1,24 @@
+import { lazy } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ProtectedRoute } from "@/auth/ProtectedRoute";
 import { LoginPage } from "@/pages/LoginPage";
 import { DashboardPage } from "@/pages/DashboardPage";
-import { TrackingPage } from "@/pages/TrackingPage";
 import { AttendancePage } from "@/pages/AttendancePage";
 import { ReportsPage } from "@/pages/ReportsPage";
 import { RosterPage } from "@/pages/RosterPage";
-import { RoutesPage } from "@/pages/RoutesPage";
 import { DriversPage } from "@/pages/DriversPage";
 import { AuditPage } from "@/pages/AuditPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
+
+// Leaflet-heavy pages are code-split so the map bundle loads on demand.
+const TrackingPage = lazy(() =>
+  import("@/pages/TrackingPage").then((m) => ({ default: m.TrackingPage })),
+);
+const RoutesPage = lazy(() =>
+  import("@/pages/RoutesPage").then((m) => ({ default: m.RoutesPage })),
+);
 
 export const router = createBrowserRouter([
   { path: "/login", element: <LoginPage /> },

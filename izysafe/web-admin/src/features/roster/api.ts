@@ -1,5 +1,6 @@
 /** Roster / enrollment data hooks (school-admin side, /schools/students/*). */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { apiDelete, apiGetList, apiPatch, apiPost } from "@/lib/api";
 import type { ListMeta } from "@/types/api";
 
@@ -57,7 +58,10 @@ export function useEnrollStudent() {
         child_name: input.child_name || null,
         class_grade: input.class_grade || null,
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["roster"] }),
+    onSuccess: (e) => {
+      toast.success(`${e.child_name} enrolled (pending consent)`);
+      qc.invalidateQueries({ queryKey: ["roster"] });
+    },
   });
 }
 
@@ -66,7 +70,10 @@ export function useUpdateEnrollment() {
   return useMutation({
     mutationFn: ({ id, class_grade }: { id: string; class_grade: string | null }) =>
       apiPatch<Enrollment>(`/schools/students/${id}`, { class_grade }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["roster"] }),
+    onSuccess: () => {
+      toast.success("Student updated");
+      qc.invalidateQueries({ queryKey: ["roster"] });
+    },
   });
 }
 
@@ -74,6 +81,9 @@ export function useRemoveEnrollment() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiDelete(`/schools/students/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["roster"] }),
+    onSuccess: () => {
+      toast.success("Student removed from roster");
+      qc.invalidateQueries({ queryKey: ["roster"] });
+    },
   });
 }

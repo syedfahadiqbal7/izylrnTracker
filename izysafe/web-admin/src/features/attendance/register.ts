@@ -1,5 +1,6 @@
 /** Daily register data hooks + manual-override mutation. */
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { apiGet, apiPut } from "@/lib/api";
 import type { AttendanceStatus } from "./types";
 
@@ -51,7 +52,9 @@ export function useSetManualAttendance() {
         status,
         arrival_time: arrival_time || null,
       }),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["daily-register"] }),
+    onSuccess: () => {
+      toast.success("Attendance updated");
+      qc.invalidateQueries({ queryKey: ["daily-register"] });
+    },
   });
 }
