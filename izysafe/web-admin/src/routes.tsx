@@ -7,6 +7,7 @@ import { TrackingPage } from "@/pages/TrackingPage";
 import { AttendancePage } from "@/pages/AttendancePage";
 import { ReportsPage } from "@/pages/ReportsPage";
 import { RosterPage } from "@/pages/RosterPage";
+import { RoutesPage } from "@/pages/RoutesPage";
 import { DriversPage } from "@/pages/DriversPage";
 import { AuditPage } from "@/pages/AuditPage";
 import { SettingsPage } from "@/pages/SettingsPage";
@@ -25,6 +26,7 @@ export const router = createBrowserRouter([
           { path: "attendance", element: <AttendancePage /> },
           { path: "reports", element: <ReportsPage /> },
           { path: "roster", element: <RosterPage /> },
+          { path: "routes", element: <RoutesPage /> },
           { path: "drivers", element: <DriversPage /> },
           { path: "audit", element: <AuditPage /> },
           { path: "settings", element: <SettingsPage /> },

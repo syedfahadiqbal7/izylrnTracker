@@ -102,7 +102,7 @@ export function RosterPage() {
     <>
       <PageHeader
         title="Roster"
-        description="Enrolled students, parent contacts, and consent status."
+        description="Enrolled students, parent contacts, and consent status. Assign students to bus stops under Routes & Buses."
         actions={
           <Button onClick={() => setAddOpen(true)}>
             <Plus className="size-4" />
