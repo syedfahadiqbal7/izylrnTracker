@@ -76,7 +76,8 @@ def _enrollment(
     return EnrollmentResponse(
         id=e.id, school_id=e.school_id, child_id=e.child_id, child_name=child.name,
         class_grade=e.class_grade, parent_name=parent_name, parent_phone=parent_phone,
-        parent_opt_in=e.parent_opt_in, bus_opt_in=e.bus_opt_in, enrolled_at=e.enrolled_at,
+        parent_opt_in=e.parent_opt_in, bus_opt_in=e.bus_opt_in,
+        location_opt_in=e.location_opt_in, enrolled_at=e.enrolled_at,
     ).model_dump(mode="json")
 
 

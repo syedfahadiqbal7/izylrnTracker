@@ -40,6 +40,9 @@ class School(Base, UUIDPkMixin, TimestampMixin, UpdatedAtMixin):
     arrival_window_from: Mapped[time] = mapped_column(
         Time, nullable=False, server_default=text("'07:00'")
     )
+    # End of the school day — upper bound of the window in which the school may see a
+    # consented child's live location (lower bound = arrival_window_from). Privacy gate.
+    day_ends_at: Mapped[time] = mapped_column(Time, nullable=False, server_default=text("'16:00'"))
     # Weekdays school is in session (ISO 1=Mon..7=Sun) — the absent sweep skips the rest.
     school_days: Mapped[list[int]] = mapped_column(
         ARRAY(Integer), nullable=False, server_default=text("ARRAY[1,2,3,4,5]")
@@ -81,6 +84,9 @@ class StudentEnrollment(Base, UUIDPkMixin):
     class_grade: Mapped[str | None] = mapped_column(String(50))
     parent_opt_in: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     bus_opt_in: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+    # Separate, explicit consent for the school to see the child's LIVE location
+    # (more sensitive than roster/attendance) — parent-granted, default OFF.
+    location_opt_in: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     enrolled_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

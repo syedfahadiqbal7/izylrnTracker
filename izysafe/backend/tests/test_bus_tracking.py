@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime, time, timezone
 
 from sqlalchemy import func, select
 
@@ -20,7 +21,7 @@ from app.models.child import Child, FamilyMember
 from app.models.device import Device
 from app.models.school import BusAssignment, BusRoute, BusRouteStop, School, SchoolAdmin, StudentEnrollment
 from app.models.user import User
-from app.services.bus_tracking_service import BusTrackingService
+from app.services.bus_tracking_service import BusLiveService, BusTrackingService
 from tests.conftest import NonClosingSession
 from tests.fakes import FakeFcmGateway
 
@@ -208,6 +209,88 @@ async def test_fleet_tenant_isolation(client, db_session):
     s = await _full_setup(db_session)
     _, _, hdr_b = await _admin(db_session, name="Other School")
     assert (await client.get("/api/v1/schools/buses/live", headers=hdr_b)).json()["data"] == []
+
+
+# --------------------------------------------------------------------------- #
+# Live child tracking (kid trackers)
+# --------------------------------------------------------------------------- #
+async def _kid_setup(db, *, parent_opt_in=True, location_opt_in=True, all_hours=True):
+    school = School(
+        name="Green Valley", timezone="UTC",
+        school_days=[1, 2, 3, 4, 5, 6, 7] if all_hours else [1, 2, 3, 4, 5],
+        arrival_window_from=time(0, 0) if all_hours else time(7, 0),
+        day_ends_at=time(23, 59) if all_hours else time(16, 0),
+    )
+    db.add(school)
+    await db.flush()
+    admin = SchoolAdmin(school_id=school.id, email=f"a-{uuid.uuid4().hex[:8]}@s.test",
+                        password_hash=hash_secret("password123"), role="admin", active=True)
+    db.add(admin)
+    parent = User(phone="+9198" + f"{uuid.uuid4().int % 10**8:08d}", country_code="+91")
+    db.add(parent)
+    await db.flush()
+    child = Child(name="Aryan")
+    db.add(child)
+    await db.flush()
+    db.add(FamilyMember(child_id=child.id, user_id=parent.id, role="parent",
+                        is_primary=True, can_view=True, can_call=True, can_manage=True))
+    db.add(StudentEnrollment(school_id=school.id, child_id=child.id,
+                             parent_opt_in=parent_opt_in, location_opt_in=location_opt_in))
+    db.add(Device(child_id=child.id, name="Aryan's Watch", device_type="watch",
+                  imei=uuid.uuid4().hex[:15], is_online=True, last_battery=88))
+    await db.flush()
+    hdr = {"Authorization": f"Bearer {create_access_token(str(admin.id), extra={'scope': 'school_admin'})}"}
+    return dict(school=school, admin=admin, hdr=hdr, child=child)
+
+
+async def test_children_live_consented(client, db_session, redis_client):
+    s = await _kid_setup(db_session)
+    await redis_client.set(rk.loc_child_latest(s["child"].id),
+                           json.dumps({"lat": 18.52, "lng": 73.85, "ts": "2026-07-03T05:00:00+00:00", "battery": 88}))
+    resp = await client.get("/api/v1/schools/children/live", headers=s["hdr"])
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert len(data) == 1
+    c = data[0]
+    assert c["child_name"] == "Aryan" and c["in_window"] is True
+    assert c["position"]["lat"] == 18.52 and c["battery"] == 88
+    assert c["device_name"] == "Aryan's Watch" and c["online"] is True
+
+
+async def test_children_live_requires_location_consent(client, db_session, redis_client):
+    s = await _kid_setup(db_session, location_opt_in=False)
+    await redis_client.set(rk.loc_child_latest(s["child"].id), json.dumps({"lat": 18.5, "lng": 73.8}))
+    assert (await client.get("/api/v1/schools/children/live", headers=s["hdr"])).json()["data"] == []
+
+
+async def test_children_live_requires_parent_optin(client, db_session, redis_client):
+    s = await _kid_setup(db_session, parent_opt_in=False)
+    assert (await client.get("/api/v1/schools/children/live", headers=s["hdr"])).json()["data"] == []
+
+
+async def test_children_live_position_hidden_outside_hours(db_session, redis_client):
+    # Mon–Fri 07:00–16:00 school; query Wed 20:00 UTC → listed but no live position.
+    s = await _kid_setup(db_session, all_hours=False)
+    await redis_client.set(rk.loc_child_latest(s["child"].id), json.dumps({"lat": 18.5, "lng": 73.8}))
+    out = await BusLiveService(db_session, redis_client).children_fleet(
+        s["admin"], now=datetime(2026, 6, 17, 20, 0, tzinfo=timezone.utc)
+    )
+    assert len(out) == 1 and out[0]["in_window"] is False and out[0]["position"] is None
+
+
+async def test_children_live_position_shown_in_hours(db_session, redis_client):
+    s = await _kid_setup(db_session, all_hours=False)
+    await redis_client.set(rk.loc_child_latest(s["child"].id), json.dumps({"lat": 18.5, "lng": 73.8}))
+    out = await BusLiveService(db_session, redis_client).children_fleet(
+        s["admin"], now=datetime(2026, 6, 17, 9, 0, tzinfo=timezone.utc)  # Wed 09:00 → in window
+    )
+    assert out[0]["in_window"] is True and out[0]["position"]["lat"] == 18.5
+
+
+async def test_children_live_tenant_isolation(client, db_session, redis_client):
+    s = await _kid_setup(db_session)
+    _, _, hdr_b = await _admin(db_session, name="Other School")
+    assert (await client.get("/api/v1/schools/children/live", headers=hdr_b)).json()["data"] == []
 
 
 # --------------------------------------------------------------------------- #

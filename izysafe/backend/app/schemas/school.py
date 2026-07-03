@@ -107,6 +107,7 @@ class SchoolResponse(BaseModel):
     on_time_before: time
     late_until: time
     arrival_window_from: time
+    day_ends_at: time
     created_at: datetime
     updated_at: datetime
 
@@ -121,6 +122,7 @@ class SchoolUpdateRequest(BaseModel):
     on_time_before: time | None = None
     late_until: time | None = None
     arrival_window_from: time | None = None
+    day_ends_at: time | None = None
 
     @field_validator("holidays")
     @classmethod
@@ -156,6 +158,7 @@ class EnrollmentResponse(BaseModel):
     parent_phone: str | None = None
     parent_opt_in: bool
     bus_opt_in: bool
+    location_opt_in: bool = False
     enrolled_at: datetime
 
 
@@ -176,12 +179,14 @@ class ParentEnrollmentResponse(BaseModel):
     class_grade: str | None = None
     parent_opt_in: bool
     bus_opt_in: bool
+    location_opt_in: bool = False
     enrolled_at: datetime
 
 
 class EnrollmentConsentRequest(BaseModel):
     parent_opt_in: bool | None = None            # approve (True) / withdraw (False)
     bus_opt_in: bool | None = None               # separate bus-tracking consent
+    location_opt_in: bool | None = None          # separate live-location consent (S10)
 
 
 # --------------------------------------------------------------------------- #
@@ -250,6 +255,27 @@ class AttendanceReportResponse(BaseModel):
     class_grade: str | None = None
     summary: AttendanceReportSummary
     per_student: list[StudentAttendanceSummary]
+
+
+# --------------------------------------------------------------------------- #
+# Live child tracking (Sprint 10 — kid trackers)
+# --------------------------------------------------------------------------- #
+class ChildLivePosition(BaseModel):
+    lat: float
+    lng: float
+    timestamp: str | None = None
+
+
+class ChildLiveResponse(BaseModel):
+    child_id: uuid.UUID
+    child_name: str
+    class_grade: str | None = None
+    device_name: str | None = None
+    online: bool
+    last_seen: datetime | None = None
+    battery: int | None = None
+    in_window: bool                       # within school hours/days (live location shown)
+    position: ChildLivePosition | None = None
 
 
 # --------------------------------------------------------------------------- #

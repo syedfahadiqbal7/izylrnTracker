@@ -239,6 +239,25 @@ async def test_update_other_school_404(client, db_session):
     assert resp.status_code == 404
 
 
+async def test_parent_location_consent(client, db_session):
+    _, _, admin_hdr = await _school_admin(db_session)
+    _, (child,), parent_hdr = await _parent_with_children(db_session, phone="+919865000000")
+    await _enroll(client, admin_hdr, "+919865000000")
+    enr = (await db_session.execute(
+        select(StudentEnrollment).where(StudentEnrollment.child_id == child.id)
+    )).scalar_one()
+    # default OFF; parent grants live-location consent
+    assert enr.location_opt_in is False
+    resp = await client.put(f"/api/v1/enrollments/{enr.id}", headers=parent_hdr,
+                            json={"location_opt_in": True})
+    assert resp.status_code == 200, resp.text
+    await db_session.refresh(enr)
+    assert enr.location_opt_in is True
+    # and the admin roster now reflects it
+    row = (await client.get(STUDENTS, headers=admin_hdr)).json()["data"][0]
+    assert row["location_opt_in"] is True
+
+
 # --------------------------------------------------------------------------- #
 # Parent-side consent
 # --------------------------------------------------------------------------- #

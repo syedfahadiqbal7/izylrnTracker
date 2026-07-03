@@ -37,6 +37,7 @@ from app.schemas.bus import (
     StopResponse,
     StopUpdate,
 )
+from app.schemas.school import ChildLiveResponse
 from app.services.bus_service import BusService
 from app.services.bus_tracking_service import BusLiveService
 
@@ -99,6 +100,18 @@ async def live_buses(
     with its route/driver/stops/roster-count and any active trip."""
     fleet = await BusLiveService(db, redis).fleet(admin)
     return success([FleetBusResponse(**b).model_dump(mode="json") for b in fleet])
+
+
+@router.get("/children/live")
+async def live_children(
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """Consented children's live positions for the map (kid trackers). Requires
+    parent_opt_in + location_opt_in; position shown only within school hours."""
+    children = await BusLiveService(db, redis).children_fleet(admin)
+    return success([ChildLiveResponse(**c).model_dump(mode="json") for c in children])
 
 
 @router.delete("/buses/{device_id}")

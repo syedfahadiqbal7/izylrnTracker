@@ -199,6 +199,14 @@ class EnrollmentService:
             )
         if "bus_opt_in" in fields and fields["bus_opt_in"] is not None:
             enrollment.bus_opt_in = fields["bus_opt_in"]
+        if "location_opt_in" in fields and fields["location_opt_in"] is not None:
+            enrollment.location_opt_in = fields["location_opt_in"]
+            AuditService.log(
+                self.db,
+                action="enrollment.location_opt_in" if fields["location_opt_in"] else "enrollment.location_opt_out",
+                actor_type="parent", actor_id=user.id, school_id=enrollment.school_id,
+                entity_type="enrollment", entity_id=enrollment.id,
+            )
         await self.db.commit()
         await self.db.refresh(enrollment)
         logger.info(

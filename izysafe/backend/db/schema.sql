@@ -600,6 +600,7 @@ CREATE TABLE schools (
     on_time_before     TIME NOT NULL DEFAULT '09:00',
     late_until         TIME NOT NULL DEFAULT '11:00',
     arrival_window_from TIME NOT NULL DEFAULT '07:00',
+    day_ends_at        TIME NOT NULL DEFAULT '16:00',       -- end of school-hours live-location window (Sprint 10, migration 0011)
     school_days INTEGER[] NOT NULL DEFAULT ARRAY[1,2,3,4,5], -- ISO weekdays in session (Sprint 8, migration 0004)
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -631,6 +632,7 @@ CREATE TABLE student_enrollments (
     class_grade     VARCHAR(50),
     parent_opt_in   BOOLEAN NOT NULL DEFAULT FALSE,        -- school visibility consent
     bus_opt_in      BOOLEAN NOT NULL DEFAULT FALSE,        -- bus tracking consent
+    location_opt_in BOOLEAN NOT NULL DEFAULT FALSE,        -- live-location consent (Sprint 10, migration 0011)
     enrolled_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (school_id, child_id)
 );
