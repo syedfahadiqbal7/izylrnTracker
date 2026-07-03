@@ -33,6 +33,7 @@ from app.schemas.bus import (
     RouteResponse,
     RouteUpdate,
     StopCreate,
+    StopReorderRequest,
     StopResponse,
     StopUpdate,
 )
@@ -227,6 +228,18 @@ async def list_stops(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     return success([_stop(s) for s in await BusService(db).list_stops(admin, route_id)])
+
+
+@router.put("/routes/{route_id}/stops/reorder")
+async def reorder_stops(
+    route_id: uuid.UUID,
+    payload: StopReorderRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Renumber a route's stops to the given order (atomic seq 1..N)."""
+    stops = await BusService(db).reorder_stops(admin, route_id, payload.stop_ids)
+    return success([_stop(s) for s in stops])
 
 
 @router.put("/stops/{stop_id}")

@@ -213,6 +213,32 @@ async def test_stop_on_foreign_route_404(client, db_session):
     assert resp.status_code == 404
 
 
+async def test_reorder_stops(client, db_session):
+    _, _, hdr = await _school_admin(db_session)
+    rid = await _route(client, hdr)
+    ids = []
+    for i, nm in enumerate(("A", "B", "C"), start=1):
+        r = await client.post(f"{BASE}/routes/{rid}/stops", headers=hdr,
+                              json={"name": nm, "lat": 18.5, "lng": 73.8, "seq": i})
+        ids.append(r.json()["data"]["id"])
+    resp = await client.put(f"{BASE}/routes/{rid}/stops/reorder", headers=hdr,
+                            json={"stop_ids": list(reversed(ids))})
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert [s["seq"] for s in data] == [1, 2, 3]
+    assert [s["name"] for s in data] == ["C", "B", "A"]
+
+
+async def test_reorder_stops_invalid_set(client, db_session):
+    _, _, hdr = await _school_admin(db_session)
+    rid = await _route(client, hdr)
+    sid = (await client.post(f"{BASE}/routes/{rid}/stops", headers=hdr,
+                             json={"name": "A", "lat": 18.5, "lng": 73.8, "seq": 1})).json()["data"]["id"]
+    resp = await client.put(f"{BASE}/routes/{rid}/stops/reorder", headers=hdr,
+                            json={"stop_ids": [sid, sid]})
+    assert resp.status_code == 400 and resp.json()["code"] == "INVALID_ORDER"
+
+
 # --------------------------------------------------------------------------- #
 # Assignments
 # --------------------------------------------------------------------------- #

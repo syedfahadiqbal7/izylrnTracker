@@ -203,6 +203,33 @@ class BusService:
         await self.db.refresh(stop)
         return stop
 
+    async def reorder_stops(
+        self, admin: SchoolAdmin, route_id: uuid.UUID, stop_ids: list[uuid.UUID]
+    ) -> list[BusRouteStop]:
+        """Atomically renumber a route's stops to the given order (seq 1..N).
+
+        Uses a two-phase reassign (bump to a free high range, then final 1..N) so the
+        unique (route_id, seq) constraint is never violated mid-transaction."""
+        await self._require(admin, BusRoute, route_id, "ROUTE_NOT_FOUND")
+        stops = (
+            await self.db.execute(
+                select(BusRouteStop).where(BusRouteStop.route_id == route_id)
+            )
+        ).scalars().all()
+        by_id = {s.id: s for s in stops}
+        if len(stop_ids) != len(stops) or set(stop_ids) != set(by_id):
+            raise APIException(
+                400, "INVALID_ORDER", "The order must list every stop on this route exactly once"
+            )
+        base = max((s.seq for s in stops), default=0) + 1
+        for i, s in enumerate(stops):          # phase 1: park in a free unique range
+            s.seq = base + i
+        await self.db.flush()
+        for i, sid in enumerate(stop_ids, start=1):  # phase 2: final 1..N
+            by_id[sid].seq = i
+        await self.db.commit()
+        return sorted(by_id.values(), key=lambda s: s.seq)
+
     async def delete_stop(self, admin: SchoolAdmin, stop_id: uuid.UUID) -> None:
         stop = await self._require_stop(admin, stop_id)
         await self.db.delete(stop)  # bus_assignments.stop_id → SET NULL

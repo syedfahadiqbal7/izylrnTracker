@@ -147,6 +147,10 @@ class StopResponse(BaseModel):
     scheduled_at: time | None = None
 
 
+class StopReorderRequest(BaseModel):
+    stop_ids: list[uuid.UUID] = Field(..., min_length=1)  # full route order, 1..N
+
+
 # -------------------------------------------------------------- assignments
 class AssignmentCreate(BaseModel):
     enrollment_id: uuid.UUID           # the student to assign (must be enrolled + consented)
