@@ -5,6 +5,9 @@ import { apiGet } from "@/lib/api";
 export interface School {
   id: string;
   name: string;
+  address: string | null;
+  contact_phone: string | null;
+  contact_email: string | null;
   timezone: string;
   holidays: string[] | null;
   on_time_before: string;
