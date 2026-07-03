@@ -434,3 +434,26 @@ async def test_export_invalid_range(client, db_session):
     resp = await client.get(f"{EXPORT}?from={DAY.isoformat()}&to={D1.isoformat()}", headers=hdr)
     assert resp.status_code == 422
     assert resp.json()["code"] == "INVALID_RANGE"
+
+
+# --------------------------------------------------------------------------- #
+# Dashboard stats
+# --------------------------------------------------------------------------- #
+async def test_dashboard_stats(client, db_session):
+    school, _, child, _, hdr = await _setup(db_session)  # 1 consented enrollment (tz=UTC)
+    other = Child(name="Bina")
+    db_session.add(other)
+    await db_session.flush()
+    db_session.add(StudentEnrollment(school_id=school.id, child_id=other.id, parent_opt_in=False))
+    today = datetime.now(timezone.utc).date()
+    db_session.add(AttendanceRecord(school_id=school.id, child_id=child.id, date=today, status="on_time"))
+    await db_session.flush()
+
+    resp = await client.get("/api/v1/schools/dashboard/stats", headers=hdr)
+    assert resp.status_code == 200, resp.text
+    d = resp.json()["data"]
+    assert d["students_enrolled"] == 2
+    assert d["consented"] == 1
+    assert d["pending_consents"] == 1
+    assert d["students_present"] == 1
+    assert d["buses_total"] == 0 and d["active_trips"] == 0

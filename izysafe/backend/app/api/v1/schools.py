@@ -32,6 +32,7 @@ from app.schemas.school import (
     AttendanceRecordResponse,
     AttendanceReportResponse,
     AuditLogResponse,
+    DashboardStatsResponse,
     DailyRegisterRow,
     EnrollmentResponse,
     EnrollmentUpdateRequest,
@@ -52,6 +53,7 @@ from app.schemas.school import (
 )
 from app.services.attendance_service import AttendanceService
 from app.services.audit_service import AuditService
+from app.services.dashboard_service import DashboardService
 from app.core.errors import APIException
 from app.services.email_gateway import EmailGateway
 from app.services.enrollment_service import EnrollmentService
@@ -293,6 +295,20 @@ async def update_my_school(
         admin, payload.model_dump(exclude_unset=True)
     )
     return success(_school(school))
+
+
+# --------------------------------------------------------------------------- #
+# Dashboard
+# --------------------------------------------------------------------------- #
+@router.get("/dashboard/stats")
+async def dashboard_stats(
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """Live roll-up for the panel dashboard (buses online, present today, consents, trips)."""
+    stats = await DashboardService(db, redis).stats(admin)
+    return success(DashboardStatsResponse(**stats).model_dump(mode="json"))
 
 
 # --------------------------------------------------------------------------- #

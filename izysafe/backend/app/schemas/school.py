@@ -278,6 +278,17 @@ class ChildLiveResponse(BaseModel):
     position: ChildLivePosition | None = None
 
 
+class DashboardStatsResponse(BaseModel):
+    buses_total: int
+    buses_online: int
+    students_enrolled: int
+    consented: int
+    pending_consents: int
+    location_consented: int
+    students_present: int
+    active_trips: int
+
+
 # --------------------------------------------------------------------------- #
 # Audit log (Slice 2)
 # --------------------------------------------------------------------------- #
