@@ -10,7 +10,7 @@ import {
   useMap,
 } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
-import type { FleetBus } from "./api";
+import type { FleetBus, LiveChild } from "./api";
 
 const INDIA_CENTER: [number, number] = [20.5937, 78.9629];
 
@@ -30,6 +30,25 @@ function busIcon(online: boolean, selected: boolean) {
   });
 }
 
+function childIcon(online: boolean, selected: boolean) {
+  const color = online ? "#8D03E0" : "#94a3b8";
+  const ring = selected
+    ? "box-shadow:0 0 0 4px rgba(22,175,240,.55);"
+    : "box-shadow:0 1px 4px rgba(0,0,0,.35);";
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${color};display:flex;align-items:center;justify-content:center;border:2px solid #fff;${ring}">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="transform:rotate(45deg)"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>
+    </div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 28],
+    popupAnchor: [0, -26],
+  });
+}
+
+const isFinitePair = (p: [number, number]) =>
+  Number.isFinite(p[0]) && Number.isFinite(p[1]);
+
 function MapController({
   positions,
   focus,
@@ -39,15 +58,25 @@ function MapController({
 }) {
   const map = useMap();
   const didFit = useRef(false);
+  const lastFocus = useRef<string>("");
 
+  // Fly only when the focused point actually changes (focus is a fresh array
+  // each render — comparing by value avoids spamming overlapping animations,
+  // which can throw "Invalid LatLng (NaN, NaN)").
   useEffect(() => {
-    if (focus) map.flyTo(focus, Math.max(map.getZoom(), 14), { duration: 0.6 });
+    if (!focus || !isFinitePair(focus)) return;
+    const key = `${focus[0]},${focus[1]}`;
+    if (key === lastFocus.current) return;
+    lastFocus.current = key;
+    map.flyTo(focus, Math.max(map.getZoom() || 12, 14), { duration: 0.6 });
   }, [focus, map]);
 
   useEffect(() => {
-    if (didFit.current || positions.length === 0) return;
-    if (positions.length === 1) map.setView(positions[0], 14);
-    else map.fitBounds(positions, { padding: [60, 60] });
+    if (didFit.current) return;
+    const valid = positions.filter(isFinitePair);
+    if (valid.length === 0) return;
+    if (valid.length === 1) map.setView(valid[0], 14);
+    else map.fitBounds(valid, { padding: [60, 60] });
     didFit.current = true;
   }, [positions, map]);
 
@@ -56,25 +85,41 @@ function MapController({
 
 export function BusMap({
   buses,
+  children,
+  showBuses,
+  showChildren,
   selectedId,
+  selectedChildId,
   onSelect,
+  onSelectChild,
   trail,
 }: {
   buses: FleetBus[];
+  children: LiveChild[];
+  showBuses: boolean;
+  showChildren: boolean;
   selectedId: string | null;
+  selectedChildId: string | null;
   onSelect: (id: string) => void;
+  onSelectChild: (id: string) => void;
   trail: [number, number][];
 }) {
-  const located = buses.filter((b) => b.position);
-  const positions = located.map(
-    (b) => [b.position!.lat, b.position!.lng] as [number, number],
-  );
-  const selected = buses.find((b) => b.bus_id === selectedId) ?? null;
+  const locatedBuses = showBuses ? buses.filter((b) => b.position) : [];
+  const locatedChildren = showChildren ? children.filter((c) => c.position) : [];
+  const positions: [number, number][] = [
+    ...locatedBuses.map((b) => [b.position!.lat, b.position!.lng] as [number, number]),
+    ...locatedChildren.map((c) => [c.position!.lat, c.position!.lng] as [number, number]),
+  ];
+
+  const selectedBus = buses.find((b) => b.bus_id === selectedId) ?? null;
+  const selectedChild = children.find((c) => c.child_id === selectedChildId) ?? null;
   const focus =
-    selected?.position != null
-      ? ([selected.position.lat, selected.position.lng] as [number, number])
-      : null;
-  const routeStops = selected?.route?.stops ?? [];
+    selectedChild?.position != null
+      ? ([selectedChild.position.lat, selectedChild.position.lng] as [number, number])
+      : selectedBus?.position != null
+        ? ([selectedBus.position.lat, selectedBus.position.lng] as [number, number])
+        : null;
+  const routeStops = selectedBus?.route?.stops ?? [];
 
   return (
     <MapContainer
@@ -89,46 +134,37 @@ export function BusMap({
       />
       <MapController positions={positions} focus={focus} />
 
-      {/* Selected route: stops + a connecting line */}
-      {routeStops.length > 1 && (
+      {/* Selected bus route: stops + connecting line */}
+      {showBuses && routeStops.length > 1 && (
         <Polyline
           positions={routeStops.map((s) => [s.lat, s.lng] as [number, number])}
           pathOptions={{ color: "#2C56EE", weight: 3, opacity: 0.5 }}
         />
       )}
-      {routeStops.map((s) => (
-        <CircleMarker
-          key={s.id}
-          center={[s.lat, s.lng]}
-          radius={6}
-          pathOptions={{
-            color: "#2C56EE",
-            fillColor: "#fff",
-            fillOpacity: 1,
-            weight: 2,
-          }}
-        >
-          <Popup>
-            <b>Stop {s.seq}</b> — {s.name}
-          </Popup>
-        </CircleMarker>
-      ))}
+      {showBuses &&
+        routeStops.map((s) => (
+          <CircleMarker
+            key={s.id}
+            center={[s.lat, s.lng]}
+            radius={6}
+            pathOptions={{ color: "#2C56EE", fillColor: "#fff", fillOpacity: 1, weight: 2 }}
+          >
+            <Popup>
+              <b>Stop {s.seq}</b> — {s.name}
+            </Popup>
+          </CircleMarker>
+        ))}
 
       {/* Live trail of the selected bus */}
-      {trail.length > 1 && (
+      {showBuses && trail.length > 1 && (
         <Polyline
           positions={trail}
-          pathOptions={{
-            color: "#16AFF0",
-            weight: 3,
-            opacity: 0.8,
-            dashArray: "6 6",
-          }}
+          pathOptions={{ color: "#16AFF0", weight: 3, opacity: 0.8, dashArray: "6 6" }}
         />
       )}
 
       {/* Bus markers */}
-      {located.map((b) => (
+      {locatedBuses.map((b) => (
         <Marker
           key={b.bus_id}
           position={[b.position!.lat, b.position!.lng]}
@@ -139,8 +175,22 @@ export function BusMap({
             <b>{b.bus_name}</b>
             <br />
             {b.route ? `Route: ${b.route.name}` : "No route"}
+          </Popup>
+        </Marker>
+      ))}
+
+      {/* Child markers */}
+      {locatedChildren.map((c) => (
+        <Marker
+          key={c.child_id}
+          position={[c.position!.lat, c.position!.lng]}
+          icon={childIcon(c.online, c.child_id === selectedChildId)}
+          eventHandlers={{ click: () => onSelectChild(c.child_id) }}
+        >
+          <Popup>
+            <b>{c.child_name}</b>
             <br />
-            {b.driver ? `Driver: ${b.driver.name}` : "No driver"}
+            {c.class_grade ?? "Student"}
           </Popup>
         </Marker>
       ))}

@@ -4,6 +4,7 @@ import {
   Check,
   Clock,
   Loader2,
+  MapPin,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -231,17 +232,25 @@ export function RosterPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {r.parent_opt_in ? (
-                            <Badge variant="success" className="gap-1">
-                              <Check className="size-3" />
-                              Consented
-                            </Badge>
-                          ) : (
-                            <Badge variant="warning" className="gap-1">
-                              <Clock className="size-3" />
-                              Pending
-                            </Badge>
-                          )}
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {r.parent_opt_in ? (
+                              <Badge variant="success" className="gap-1">
+                                <Check className="size-3" />
+                                Consented
+                              </Badge>
+                            ) : (
+                              <Badge variant="warning" className="gap-1">
+                                <Clock className="size-3" />
+                                Pending
+                              </Badge>
+                            )}
+                            {r.location_opt_in && (
+                              <Badge variant="secondary" className="gap-1">
+                                <MapPin className="size-3" />
+                                Location
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>

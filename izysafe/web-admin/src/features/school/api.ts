@@ -13,6 +13,7 @@ export interface School {
   on_time_before: string;
   late_until: string;
   arrival_window_from: string;
+  day_ends_at: string;
   created_at: string;
   updated_at: string;
 }

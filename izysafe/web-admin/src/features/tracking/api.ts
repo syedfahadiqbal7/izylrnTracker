@@ -39,6 +39,29 @@ export function useFleet(refetchMs = 10_000) {
   });
 }
 
+export interface LiveChild {
+  child_id: string;
+  child_name: string;
+  class_grade: string | null;
+  device_name: string | null;
+  online: boolean;
+  last_seen: string | null;
+  battery: number | null;
+  /** Within school hours/days — live position is only exposed when true. */
+  in_window: boolean;
+  position: { lat: number; lng: number; timestamp: string | null } | null;
+}
+
+/** Consented children's live positions (kid trackers). */
+export function useChildrenFleet(refetchMs = 10_000) {
+  return useQuery({
+    queryKey: ["children-fleet"],
+    queryFn: () => apiGet<LiveChild[]>("/schools/children/live"),
+    refetchInterval: refetchMs,
+    refetchOnWindowFocus: true,
+  });
+}
+
 export interface RouteAssignment {
   id: string;
   route_id: string;

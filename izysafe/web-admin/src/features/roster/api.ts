@@ -13,6 +13,7 @@ export interface Enrollment {
   parent_phone: string | null;
   parent_opt_in: boolean;
   bus_opt_in: boolean;
+  location_opt_in: boolean;
   enrolled_at: string;
 }
 

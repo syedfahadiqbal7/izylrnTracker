@@ -26,6 +26,7 @@ export interface SchoolUpdate {
   on_time_before?: string;
   late_until?: string;
   arrival_window_from?: string;
+  day_ends_at?: string;
 }
 
 export function useUpdateSchool() {

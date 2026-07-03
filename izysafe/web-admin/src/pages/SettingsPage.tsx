@@ -259,6 +259,7 @@ function AttendanceConfigCard({ school, canEdit }: { school: School; canEdit: bo
   const [onTime, setOnTime] = useState(hhmm(school.on_time_before));
   const [lateUntil, setLateUntil] = useState(hhmm(school.late_until));
   const [windowFrom, setWindowFrom] = useState(hhmm(school.arrival_window_from));
+  const [dayEnds, setDayEnds] = useState(hhmm(school.day_ends_at));
   const [holidays, setHolidays] = useState<string[]>(school.holidays ?? []);
   const [newHoliday, setNewHoliday] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -281,6 +282,7 @@ function AttendanceConfigCard({ school, canEdit }: { school: School; canEdit: bo
         on_time_before: onTime,
         late_until: lateUntil,
         arrival_window_from: windowFrom,
+        day_ends_at: dayEnds,
         holidays,
       });
       setSaved(true);
@@ -299,7 +301,7 @@ function AttendanceConfigCard({ school, canEdit }: { school: School; canEdit: bo
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-4">
             <div className="space-y-2">
               <Label htmlFor="cf-window">Arrival window opens</Label>
               <Input
@@ -339,7 +341,24 @@ function AttendanceConfigCard({ school, canEdit }: { school: School; canEdit: bo
                 }}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="cf-end">School day ends</Label>
+              <Input
+                id="cf-end"
+                type="time"
+                value={dayEnds}
+                disabled={!canEdit}
+                onChange={(e) => {
+                  setDayEnds(e.target.value);
+                  setSaved(false);
+                }}
+              />
+            </div>
           </div>
+          <p className="text-xs text-muted-foreground">
+            Students' live location is visible to the school only between the
+            arrival window and the end of the school day, on school days.
+          </p>
 
           <div className="space-y-2">
             <Label>Holidays</Label>
