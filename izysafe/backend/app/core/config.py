@@ -16,6 +16,9 @@ class Settings(BaseSettings):
 
     # ---- Environment ----
     environment: str = "development"
+    # The lifespan background loops (BatchWriter, DeviceStatusMonitor) are SINGLETONS.
+    # Keep true on exactly one web instance; set false on any extra web replicas.
+    run_background_loops: bool = True
 
     # ---- PostgreSQL ----
     # Async URL (asyncpg) used by the app. Alembic derives a sync URL from this.
