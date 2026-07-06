@@ -6,6 +6,7 @@ import '../../core/api_client.dart';
 import '../../core/i18n.dart';
 import '../../core/language_button.dart';
 import '../../core/theme.dart';
+import '../alerts/providers.dart';
 import '../auth/auth_controller.dart';
 import 'child.dart';
 import 'children_providers.dart';
@@ -39,6 +40,7 @@ class HomeScreen extends ConsumerWidget {
           ],
         ),
         actions: [
+          const _AlertsBell(),
           const LanguageButton(),
           IconButton(
             tooltip: t.t('app.sign_out', 'Sign out'),
@@ -88,6 +90,44 @@ class HomeScreen extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// AppBar bell → Alerts inbox, with an unread badge.
+class _AlertsBell extends ConsumerWidget {
+  const _AlertsBell();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final unread = ref.watch(unreadCountProvider).valueOrNull ?? 0;
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        IconButton(
+          tooltip: 'Alerts',
+          icon: const Icon(Icons.notifications_outlined, size: 22),
+          onPressed: () => context.push('/alerts'),
+        ),
+        if (unread > 0)
+          Positioned(
+            top: 8,
+            right: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+              constraints: const BoxConstraints(minWidth: 16),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE11D48),
+                borderRadius: BorderRadius.circular(9),
+              ),
+              alignment: Alignment.center,
+              child: Text(unread > 9 ? '9+' : '$unread',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700)),
+            ),
+          ),
+      ],
     );
   }
 }

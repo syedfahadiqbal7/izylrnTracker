@@ -89,6 +89,18 @@ class ApiClient {
   Future<dynamic> get(String path, {Map<String, dynamic>? query}) =>
       _unwrap(() => _dio.get(path, queryParameters: query));
 
+  /// Like [get] but returns the whole `{data, meta}` envelope (for list endpoints
+  /// whose `meta` carries paging / unread counts).
+  Future<Map<String, dynamic>> getEnvelope(String path,
+      {Map<String, dynamic>? query}) async {
+    try {
+      final resp = await _dio.get(path, queryParameters: query);
+      return (resp.data as Map).cast<String, dynamic>();
+    } on DioException catch (e) {
+      throw _toApiException(e);
+    }
+  }
+
   Future<dynamic> post(String path, {Object? body}) =>
       _unwrap(() => _dio.post(path, data: body));
 

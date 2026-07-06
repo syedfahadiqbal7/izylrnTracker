@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/i18n.dart';
 import 'auth_controller.dart';
 import 'brand_header.dart';
 
@@ -27,9 +28,10 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
   }
 
   Future<void> _verify() async {
+    final t = ref.read(translatorProvider);
     final code = _otp.text.trim();
     if (code.length < 4) {
-      setState(() => _error = 'Enter the code we sent you');
+      setState(() => _error = t.t('auth.enter_code', 'Enter the code we sent you'));
       return;
     }
     setState(() {
@@ -43,7 +45,9 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = 'Something went wrong. Please try again.');
+      setState(() => _error = ref
+          .read(translatorProvider)
+          .t('common.error_generic', 'Something went wrong. Please try again.'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -53,20 +57,23 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     try {
       await ref.read(authRepositoryProvider).sendOtp(widget.phone);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('A new code has been sent')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(ref
+                .read(translatorProvider)
+                .t('auth.resent', 'A new code has been sent'))));
       }
     } catch (_) {}
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = ref.watch(translatorProvider);
     return Scaffold(
       body: Column(
         children: [
-          const BrandHeader(
-            title: 'Verify your number',
-            subtitle: 'Enter the 6-digit code',
+          BrandHeader(
+            title: t.t('auth.verify_title', 'Verify your number'),
+            subtitle: t.t('auth.verify_sub', 'Enter the 6-digit code'),
           ),
           Expanded(
             child: SingleChildScrollView(
@@ -74,7 +81,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Sent to ${widget.phone}',
+                  Text('${t.t('auth.sent_to', 'Sent to')} ${widget.phone}',
                       style: TextStyle(color: Colors.grey.shade700)),
                   if (widget.channel == 'dev') ...[
                     const SizedBox(height: 8),
@@ -84,9 +91,11 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                         color: const Color(0xFFFFF7E6),
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Text(
-                        'Dev mode: no SMS provider configured — check the backend logs for the code.',
-                        style: TextStyle(fontSize: 12.5, color: Color(0xFF8A6D1B)),
+                      child: Text(
+                        t.t('auth.dev_hint',
+                            'Dev mode: no SMS provider configured — check the backend logs for the code.'),
+                        style: const TextStyle(
+                            fontSize: 12.5, color: Color(0xFF8A6D1B)),
                       ),
                     ),
                   ],
@@ -120,7 +129,7 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                             width: 22,
                             child: CircularProgressIndicator(
                                 strokeWidth: 2.4, color: Colors.white))
-                        : const Text('Verify & continue'),
+                        : Text(t.t('auth.verify_continue', 'Verify & continue')),
                   ),
                   const SizedBox(height: 8),
                   Row(
@@ -128,10 +137,10 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                     children: [
                       TextButton(
                           onPressed: () => context.go('/login'),
-                          child: const Text('Change number')),
+                          child: Text(t.t('auth.change_number', 'Change number'))),
                       TextButton(
                           onPressed: _resend,
-                          child: const Text('Resend code')),
+                          child: Text(t.t('auth.resend', 'Resend code'))),
                     ],
                   ),
                 ],

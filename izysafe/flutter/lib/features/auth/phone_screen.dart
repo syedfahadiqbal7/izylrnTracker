@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/api_client.dart';
+import '../../core/i18n.dart';
 import 'auth_controller.dart';
 import 'brand_header.dart';
 
@@ -36,9 +37,10 @@ class _PhoneScreenState extends ConsumerState<PhoneScreen> {
   }
 
   Future<void> _submit() async {
+    final t = ref.read(translatorProvider);
     final digits = _phone.text.trim();
     if (digits.isEmpty) {
-      setState(() => _error = 'Enter your phone number');
+      setState(() => _error = t.t('auth.enter_phone', 'Enter your phone number'));
       return;
     }
     final full = '${_country.dial}$digits';
@@ -53,7 +55,7 @@ class _PhoneScreenState extends ConsumerState<PhoneScreen> {
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (_) {
-      setState(() => _error = 'Something went wrong. Please try again.');
+      setState(() => _error = t.t('common.error_generic', 'Something went wrong. Please try again.'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -61,12 +63,13 @@ class _PhoneScreenState extends ConsumerState<PhoneScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = ref.watch(translatorProvider);
     return Scaffold(
       body: Column(
         children: [
-          const BrandHeader(
-            title: 'Welcome to izyLrn',
-            subtitle: 'Keep your children safe, always',
+          BrandHeader(
+            title: t.t('auth.welcome', 'Welcome to izyLrn'),
+            subtitle: t.t('auth.tagline', 'Keep your children safe, always'),
           ),
           Expanded(
             child: SingleChildScrollView(
@@ -74,13 +77,13 @@ class _PhoneScreenState extends ConsumerState<PhoneScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Sign in',
+                  Text(t.t('auth.sign_in', 'Sign in'),
                       style: Theme.of(context)
                           .textTheme
                           .headlineSmall
                           ?.copyWith(fontWeight: FontWeight.w700)),
                   const SizedBox(height: 6),
-                  Text('We’ll send a one-time code to your phone.',
+                  Text(t.t('auth.send_code_sub', 'We’ll send a one-time code to your phone.'),
                       style: TextStyle(color: Colors.grey.shade600)),
                   const SizedBox(height: 24),
                   Row(
@@ -115,8 +118,8 @@ class _PhoneScreenState extends ConsumerState<PhoneScreen> {
                           inputFormatters: [
                             FilteringTextInputFormatter.digitsOnly
                           ],
-                          decoration:
-                              const InputDecoration(hintText: 'Phone number'),
+                          decoration: InputDecoration(
+                              hintText: t.t('auth.phone_hint', 'Phone number')),
                           onSubmitted: (_) => _submit(),
                         ),
                       ),
@@ -137,11 +140,11 @@ class _PhoneScreenState extends ConsumerState<PhoneScreen> {
                             width: 22,
                             child: CircularProgressIndicator(
                                 strokeWidth: 2.4, color: Colors.white))
-                        : const Text('Send code'),
+                        : Text(t.t('auth.send_code', 'Send code')),
                   ),
                   const SizedBox(height: 16),
                   Center(
-                    child: Text('India & UAE numbers supported',
+                    child: Text(t.t('auth.regions', 'India & UAE numbers supported'),
                         style: TextStyle(
                             color: Colors.grey.shade500, fontSize: 12)),
                   ),
