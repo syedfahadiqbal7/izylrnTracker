@@ -9,7 +9,9 @@ import 'features/auth/phone_screen.dart';
 import 'features/alerts/alerts_screen.dart';
 import 'features/children/child.dart';
 import 'features/children/home_screen.dart';
+import 'features/devices/devices_screen.dart';
 import 'features/geofences/safe_zones_screen.dart';
+import 'features/share/share_links_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/tracking/live_map_screen.dart';
 
@@ -60,6 +62,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/child/:id/zones',
         builder: (_, state) => SafeZonesScreen(
+          childId: state.pathParameters['id']!,
+          childName: state.extra is Child ? (state.extra as Child).name : null,
+        ),
+      ),
+      GoRoute(
+        path: '/child/:id/devices',
+        builder: (_, state) => DevicesScreen(
+          childId: state.pathParameters['id']!,
+          childName: state.extra is Child ? (state.extra as Child).name : null,
+        ),
+      ),
+      GoRoute(
+        path: '/child/:id/share',
+        builder: (_, state) => ShareLinksScreen(
           childId: state.pathParameters['id']!,
           childName: state.extra is Child ? (state.extra as Child).name : null,
         ),

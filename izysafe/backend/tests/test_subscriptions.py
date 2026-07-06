@@ -135,10 +135,12 @@ async def test_me_returns_latest_subscription(client, db_session):
 def test_catalog_limits_match_enforcement_constants():
     from app.core.plans import PLANS as CATALOG
     from app.services.children_service import CHILD_LIMITS
+    from app.services.device_service import DEVICE_LIMITS
     from app.services.geofence_service import GEOFENCE_LIMITS
     from app.services.invite_service import GUARDIAN_LIMITS
 
     for tier in ("free", "basic", "premium", "school"):
         assert CATALOG[tier].limits["children"] == CHILD_LIMITS[tier]
+        assert CATALOG[tier].limits["devices_per_child"] == DEVICE_LIMITS[tier]
         assert CATALOG[tier].limits["geofences"] == GEOFENCE_LIMITS[tier]
         assert CATALOG[tier].limits["guardians"] == GUARDIAN_LIMITS[tier]

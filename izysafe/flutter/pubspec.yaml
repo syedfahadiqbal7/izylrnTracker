@@ -43,6 +43,7 @@ dependencies:
   latlong2: ^0.10.1
   url_launcher: ^6.3.2
   collection: ^1.19.1
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

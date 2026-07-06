@@ -60,12 +60,23 @@ class FakeRealtimeGateway:
 class FakeTraccarGateway:
     """Stand-in for TraccarGateway: records dispatched commands, returns configurable ok."""
 
-    def __init__(self, ok: bool = True) -> None:
+    def __init__(self, ok: bool = True, next_device_id: int | None = 555) -> None:
         self.ok = ok  # set False to simulate a rejected/failed command
+        self.next_device_id = next_device_id  # set None to simulate unconfigured/failed registration
         self.calls: list[dict] = []                   # {traccar_id, data} for send_command
         self.sound_around_calls: list[tuple[int, str]] = []   # (traccar_id, phone)
         self.two_way_calls: list[tuple[int, str]] = []        # (traccar_id, phone)
         self.text_calls: list[tuple[int, str]] = []           # (traccar_id, text)
+        self.created_devices: list[tuple[str, str]] = []      # (imei, name)
+        self.deleted_devices: list[int] = []                  # traccar_id
+
+    async def create_device(self, imei: str, name: str) -> int | None:
+        self.created_devices.append((imei, name))
+        return self.next_device_id
+
+    async def delete_device(self, traccar_id: int) -> bool:
+        self.deleted_devices.append(traccar_id)
+        return self.ok
 
     async def send_command(
         self, traccar_id: int, data: str, description: str = "IzySafe command"

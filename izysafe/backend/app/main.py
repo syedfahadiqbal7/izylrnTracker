@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.public_track import router as public_track_router
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
@@ -112,3 +113,6 @@ async def root() -> dict[str, str]:
 
 # --- API v1 routers ----------------------------------------------------------
 app.include_router(api_router, prefix="/api/v1")
+
+# --- Public (login-less) live-tracking page, served at root: /track/{token} --
+app.include_router(public_track_router)

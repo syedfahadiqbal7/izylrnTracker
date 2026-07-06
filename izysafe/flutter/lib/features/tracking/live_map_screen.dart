@@ -110,7 +110,11 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
           ),
 
           // Top bar (over the map).
-          _TopBar(title: widget.child?.name ?? t.t('map.title', 'Live Location')),
+          _TopBar(
+            title: widget.child?.name ?? t.t('map.title', 'Live Location'),
+            childId: childId,
+            child: widget.child,
+          ),
 
           // SOS banner.
           if (sos != null)
@@ -299,12 +303,15 @@ class _Pin extends StatelessWidget {
   }
 }
 
-class _TopBar extends StatelessWidget {
+class _TopBar extends ConsumerWidget {
   final String title;
-  const _TopBar({required this.title});
+  final String childId;
+  final Child? child;
+  const _TopBar({required this.title, required this.childId, this.child});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(translatorProvider);
     return Positioned(
       left: 12,
       right: 12,
@@ -326,6 +333,18 @@ class _TopBar extends StatelessWidget {
                     style: const TextStyle(
                         fontWeight: FontWeight.w700, fontSize: 16),
                     overflow: TextOverflow.ellipsis),
+              ),
+              IconButton(
+                tooltip: t.t('devices.title', 'Devices'),
+                icon: const Icon(Icons.watch_rounded),
+                onPressed: () =>
+                    context.push('/child/$childId/devices', extra: child),
+              ),
+              IconButton(
+                tooltip: t.t('share.title', 'Share links'),
+                icon: const Icon(Icons.share_location_rounded),
+                onPressed: () =>
+                    context.push('/child/$childId/share', extra: child),
               ),
               const LanguageButton(),
             ],
