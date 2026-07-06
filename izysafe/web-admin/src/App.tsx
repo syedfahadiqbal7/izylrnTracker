@@ -6,6 +6,7 @@ import {
 import { RouterProvider } from "react-router-dom";
 import { Toaster, toast } from "sonner";
 import { AuthProvider } from "@/auth/AuthContext";
+import { I18nProvider } from "@/lib/i18n/I18nProvider";
 import { ApiClientError } from "@/types/api";
 import { router } from "./routes";
 
@@ -32,10 +33,12 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <RouterProvider router={router} />
-        <Toaster richColors closeButton position="top-right" />
-      </AuthProvider>
+      <I18nProvider>
+        <AuthProvider>
+          <RouterProvider router={router} />
+          <Toaster richColors closeButton position="top-right" />
+        </AuthProvider>
+      </I18nProvider>
     </QueryClientProvider>
   );
 }

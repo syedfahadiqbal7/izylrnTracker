@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
+import { useT } from "@/lib/i18n/I18nProvider";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,6 +60,7 @@ const SHORTCUTS: Shortcut[] = [
 
 export function DashboardPage() {
   const { admin } = useAuth();
+  const t = useT();
   const stats = useDashboardStats();
   const greetingName = admin?.name ?? admin?.email ?? "";
   const s = stats.data;
@@ -66,8 +68,8 @@ export function DashboardPage() {
   return (
     <>
       <PageHeader
-        title="Dashboard"
-        description={`Welcome back${greetingName ? `, ${greetingName}` : ""}.`}
+        title={t("dashboard.title", "Dashboard")}
+        description={`${t("dashboard.welcome", "Welcome back")}${greetingName ? `, ${greetingName}` : ""}.`}
       />
 
       {/* Live tracking hero */}

@@ -1,34 +1,27 @@
-import {
-  ClipboardCheck,
-  FileBarChart,
-  LayoutDashboard,
-  MapPin,
-  Route as RouteIcon,
-  ScrollText,
-  Settings,
-  Truck,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
-
+/**
+ * Static navigation fallback. The live sidebar is driven by admin-managed menu_items
+ * (GET /schools/menu); this list only backstops the UI if that request fails. `labelKey`
+ * + `iconName` mirror the seeded menu rows so the fallback looks identical.
+ */
 export interface NavItem {
-  label: string;
+  /** Translation key for the label (e.g. "nav.dashboard"). */
+  labelKey: string;
   to: string;
-  icon: LucideIcon;
-  /** Restricts the item to role='admin' (e.g. the audit trail). */
+  /** Lucide icon name resolved via features/navigation/icons. */
+  iconName: string;
+  /** Restricts the item to role='admin' (e.g. the audit trail + menu management). */
   adminOnly?: boolean;
-  /** Exact-match the route (used for the index "/"). */
-  end?: boolean;
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: "Dashboard", to: "/", icon: LayoutDashboard, end: true },
-  { label: "Live Tracking", to: "/tracking", icon: MapPin },
-  { label: "Attendance", to: "/attendance", icon: ClipboardCheck },
-  { label: "Reports", to: "/reports", icon: FileBarChart },
-  { label: "Roster", to: "/roster", icon: Users },
-  { label: "Routes & Buses", to: "/routes", icon: RouteIcon },
-  { label: "Drivers", to: "/drivers", icon: Truck },
-  { label: "Audit", to: "/audit", icon: ScrollText, adminOnly: true },
-  { label: "Settings", to: "/settings", icon: Settings },
+  { labelKey: "nav.dashboard", to: "/", iconName: "LayoutDashboard" },
+  { labelKey: "nav.tracking", to: "/tracking", iconName: "MapPin" },
+  { labelKey: "nav.attendance", to: "/attendance", iconName: "ClipboardCheck" },
+  { labelKey: "nav.reports", to: "/reports", iconName: "FileBarChart" },
+  { labelKey: "nav.roster", to: "/roster", iconName: "Users" },
+  { labelKey: "nav.routes", to: "/routes", iconName: "Route" },
+  { labelKey: "nav.drivers", to: "/drivers", iconName: "Truck" },
+  { labelKey: "nav.audit", to: "/audit", iconName: "ScrollText", adminOnly: true },
+  { labelKey: "nav.menus", to: "/menus", iconName: "ListTree", adminOnly: true },
+  { labelKey: "nav.settings", to: "/settings", iconName: "Settings" },
 ];

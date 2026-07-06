@@ -9,6 +9,7 @@ import { ReportsPage } from "@/pages/ReportsPage";
 import { RosterPage } from "@/pages/RosterPage";
 import { DriversPage } from "@/pages/DriversPage";
 import { AuditPage } from "@/pages/AuditPage";
+import { MenusPage } from "@/pages/MenusPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 
@@ -36,6 +37,7 @@ export const router = createBrowserRouter([
           { path: "routes", element: <RoutesPage /> },
           { path: "drivers", element: <DriversPage /> },
           { path: "audit", element: <AuditPage /> },
+          { path: "menus", element: <MenusPage /> },
           { path: "settings", element: <SettingsPage /> },
           { path: "404", element: <NotFoundPage /> },
           { path: "*", element: <Navigate to="/404" replace /> },

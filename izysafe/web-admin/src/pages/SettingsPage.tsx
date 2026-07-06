@@ -47,6 +47,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ApiClientError } from "@/types/api";
+import { useT } from "@/lib/i18n/I18nProvider";
+import { LocalizationCard } from "@/features/localization/LocalizationCard";
 import { useSchool, type School } from "@/features/school/api";
 import {
   useAdmins,
@@ -73,14 +75,15 @@ const hhmm = (t: string | null | undefined) => (t ? t.slice(0, 5) : "");
 
 export function SettingsPage() {
   const { admin } = useAuth();
+  const t = useT();
   const school = useSchool();
   const isAdmin = admin?.role === "admin";
 
   return (
     <>
       <PageHeader
-        title="Settings"
-        description="School profile, attendance configuration, your account, and staff."
+        title={t("settings.title", "Settings")}
+        description="School profile, attendance configuration, localization, your account, and staff."
       />
       {school.isLoading ? (
         <div className="space-y-4">
@@ -93,6 +96,7 @@ export function SettingsPage() {
           <AttendanceConfigCard school={school.data} canEdit={isAdmin} />
           <MyAccountCard />
           <AdminsCard isAdmin={isAdmin} meId={admin?.id} />
+          {isAdmin && <LocalizationCard />}
         </div>
       ) : (
         <Card>
