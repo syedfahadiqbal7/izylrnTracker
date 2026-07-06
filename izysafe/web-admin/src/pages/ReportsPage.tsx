@@ -102,7 +102,7 @@ export function ReportsPage() {
       setExportError(
         err instanceof ApiClientError
           ? err.message
-          : "Could not export the CSV. Please try again.",
+          : t("reports.export_error", "Could not export the CSV. Please try again."),
       );
     } finally {
       setExporting(false);
@@ -127,7 +127,7 @@ export function ReportsPage() {
             ) : (
               <Download className="size-4" />
             )}
-            Export CSV
+            {t("reports.export_csv", "Export CSV")}
           </Button>
         }
       />
@@ -136,17 +136,17 @@ export function ReportsPage() {
       <Card className="mb-6">
         <CardContent className="flex flex-wrap items-end gap-4 pt-6">
           <div className="space-y-2">
-            <Label>Date range</Label>
+            <Label>{t("reports.date_range", "Date range")}</Label>
             <DateRangePicker value={range} onChange={setRange} />
           </div>
           <div className="space-y-2">
-            <Label>Class / grade</Label>
+            <Label>{t("att.class_grade", "Class / grade")}</Label>
             <Select value={classGrade} onValueChange={setClassGrade}>
               <SelectTrigger className="w-56">
                 <SelectValue placeholder={t("common.all_classes", "All classes")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>All classes</SelectItem>
+                <SelectItem value={ALL}>{t("common.all_classes", "All classes")}</SelectItem>
                 {grades.data?.map((g) => (
                   <SelectItem key={g} value={g}>
                     {g}
@@ -167,7 +167,7 @@ export function ReportsPage() {
       {!params && (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            Select a start and end date to generate the report.
+            {t("reports.pick_range", "Select a start and end date to generate the report.")}
           </CardContent>
         </Card>
       )}
@@ -178,7 +178,7 @@ export function ReportsPage() {
             <p className="text-sm font-medium text-destructive">
               {report.error instanceof ApiClientError
                 ? report.error.message
-                : "Failed to load the report."}
+                : t("reports.load_error", "Failed to load the report.")}
             </p>
           </CardContent>
         </Card>
@@ -191,13 +191,13 @@ export function ReportsPage() {
           {/* Summary cards */}
           <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard
-              label="Present rate"
+              label={t("reports.present_rate", "Present rate")}
               value={summary.records ? pct(summary.present_rate) : "—"}
-              hint="On-time + late + early"
+              hint={t("reports.present_rate_hint", "On-time + late + early")}
             />
-            <StatCard label="Students" value={String(summary.students)} />
+            <StatCard label={t("common.students", "Students")} value={String(summary.students)} />
             <StatCard
-              label="Total records"
+              label={t("reports.total_records", "Total records")}
               value={String(summary.records)}
               hint={`${report.data.date_from} → ${report.data.date_to}`}
             />
@@ -206,7 +206,7 @@ export function ReportsPage() {
           {/* By-status breakdown */}
           <Card className="mb-6">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">By status</CardTitle>
+              <CardTitle className="text-base">{t("reports.by_status", "By status")}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-3">
               {STATUS_ORDER.map((s) => (
@@ -215,7 +215,7 @@ export function ReportsPage() {
                   className="flex items-center gap-2 rounded-lg border px-3 py-2"
                 >
                   <Badge variant={STATUS_META[s].variant}>
-                    {STATUS_META[s].label}
+                    {t(`reports.status_${s}`, STATUS_META[s].label)}
                   </Badge>
                   <span className="text-sm font-semibold">
                     {summary.by_status[s] ?? 0}
@@ -234,28 +234,28 @@ export function ReportsPage() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">
-                Per-student ({rows.length})
+                {t("reports.per_student", "Per-student")} ({rows.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
               {rows.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
-                  No attendance records in this range.
+                  {t("reports.no_records", "No attendance records in this range.")}
                 </p>
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Class</TableHead>
-                      <TableHead className="text-right">On&nbsp;time</TableHead>
-                      <TableHead className="text-right">Late</TableHead>
-                      <TableHead className="text-right">Early</TableHead>
-                      <TableHead className="text-right">Absent</TableHead>
-                      <TableHead className="text-right">Unknown</TableHead>
-                      <TableHead className="text-right">Present</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead className="text-right">Rate</TableHead>
+                      <TableHead>{t("common.student", "Student")}</TableHead>
+                      <TableHead>{t("common.class", "Class")}</TableHead>
+                      <TableHead className="text-right">{t("reports.on_time", "On time")}</TableHead>
+                      <TableHead className="text-right">{t("reports.late", "Late")}</TableHead>
+                      <TableHead className="text-right">{t("reports.early", "Early")}</TableHead>
+                      <TableHead className="text-right">{t("reports.absent", "Absent")}</TableHead>
+                      <TableHead className="text-right">{t("reports.unknown", "Unknown")}</TableHead>
+                      <TableHead className="text-right">{t("reports.present", "Present")}</TableHead>
+                      <TableHead className="text-right">{t("reports.total", "Total")}</TableHead>
+                      <TableHead className="text-right">{t("reports.rate", "Rate")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

@@ -83,7 +83,7 @@ export function SettingsPage() {
     <>
       <PageHeader
         title={t("settings.title", "Settings")}
-        description="School profile, attendance configuration, localization, your account, and staff."
+        description={t("settings.desc", "School profile, attendance configuration, localization, your account, and staff.")}
       />
       {school.isLoading ? (
         <div className="space-y-4">
@@ -101,7 +101,7 @@ export function SettingsPage() {
       ) : (
         <Card>
           <CardContent className="py-12 text-center text-sm font-medium text-destructive">
-            Failed to load settings.
+            {t("settings.load_error", "Failed to load settings.")}
           </CardContent>
         </Card>
       )}
@@ -110,14 +110,16 @@ export function SettingsPage() {
 }
 
 function SavedHint({ show }: { show: boolean }) {
+  const t = useT();
   if (!show) return null;
-  return <span className="text-sm font-medium text-emerald-600">Saved ✓</span>;
+  return <span className="text-sm font-medium text-emerald-600">{t("settings.saved", "Saved ✓")}</span>;
 }
 
 // --------------------------------------------------------------------------- //
 // School profile
 // --------------------------------------------------------------------------- //
 function SchoolProfileCard({ school, canEdit }: { school: School; canEdit: boolean }) {
+  const t = useT();
   const update = useUpdateSchool();
   const [name, setName] = useState(school.name);
   const [address, setAddress] = useState(school.address ?? "");
@@ -145,21 +147,21 @@ function SchoolProfileCard({ school, canEdit }: { school: School; canEdit: boole
       });
       setSaved(true);
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Could not save.");
+      setError(err instanceof ApiClientError ? err.message : t("settings.could_not_save", "Could not save."));
     }
   };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>School profile</CardTitle>
-        <CardDescription>Name, address, and contact details.</CardDescription>
+        <CardTitle>{t("settings.school_profile", "School profile")}</CardTitle>
+        <CardDescription>{t("settings.school_profile_desc", "Name, address, and contact details.")}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="sc-name">School name</Label>
+              <Label htmlFor="sc-name">{t("settings.school_name", "School name")}</Label>
               <Input
                 id="sc-name"
                 value={name}
@@ -171,7 +173,7 @@ function SchoolProfileCard({ school, canEdit }: { school: School; canEdit: boole
               />
             </div>
             <div className="space-y-2">
-              <Label>Timezone</Label>
+              <Label>{t("settings.timezone", "Timezone")}</Label>
               <Select
                 value={timezone}
                 onValueChange={(v) => {
@@ -194,7 +196,7 @@ function SchoolProfileCard({ school, canEdit }: { school: School; canEdit: boole
             </div>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="sc-addr">Address</Label>
+            <Label htmlFor="sc-addr">{t("settings.address", "Address")}</Label>
             <Input
               id="sc-addr"
               value={address}
@@ -203,12 +205,12 @@ function SchoolProfileCard({ school, canEdit }: { school: School; canEdit: boole
                 setAddress(e.target.value);
                 setSaved(false);
               }}
-              placeholder="Street, city"
+              placeholder={t("settings.address_ph", "Street, city")}
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="sc-phone">Contact phone</Label>
+              <Label htmlFor="sc-phone">{t("settings.contact_phone", "Contact phone")}</Label>
               <Input
                 id="sc-phone"
                 value={phone}
@@ -221,7 +223,7 @@ function SchoolProfileCard({ school, canEdit }: { school: School; canEdit: boole
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="sc-email">Contact email</Label>
+              <Label htmlFor="sc-email">{t("settings.contact_email", "Contact email")}</Label>
               <Input
                 id="sc-email"
                 type="email"
@@ -240,13 +242,13 @@ function SchoolProfileCard({ school, canEdit }: { school: School; canEdit: boole
             <div className="flex items-center gap-3">
               <Button type="submit" disabled={update.isPending || !name.trim()}>
                 {update.isPending && <Loader2 className="size-4 animate-spin" />}
-                Save profile
+                {t("settings.save_profile", "Save profile")}
               </Button>
               <SavedHint show={saved} />
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Only administrators can edit school settings.
+              {t("settings.admin_edit_only", "Only administrators can edit school settings.")}
             </p>
           )}
         </form>
@@ -259,6 +261,7 @@ function SchoolProfileCard({ school, canEdit }: { school: School; canEdit: boole
 // Attendance & calendar
 // --------------------------------------------------------------------------- //
 function AttendanceConfigCard({ school, canEdit }: { school: School; canEdit: boolean }) {
+  const t = useT();
   const update = useUpdateSchool();
   const [onTime, setOnTime] = useState(hhmm(school.on_time_before));
   const [lateUntil, setLateUntil] = useState(hhmm(school.late_until));
@@ -291,23 +294,23 @@ function AttendanceConfigCard({ school, canEdit }: { school: School; canEdit: bo
       });
       setSaved(true);
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Could not save.");
+      setError(err instanceof ApiClientError ? err.message : t("settings.could_not_save", "Could not save."));
     }
   };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Attendance & calendar</CardTitle>
+        <CardTitle>{t("settings.attendance_calendar", "Attendance & calendar")}</CardTitle>
         <CardDescription>
-          Arrival window, on-time / late thresholds, and holidays.
+          {t("settings.attendance_calendar_desc", "Arrival window, on-time / late thresholds, and holidays.")}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-4">
             <div className="space-y-2">
-              <Label htmlFor="cf-window">Arrival window opens</Label>
+              <Label htmlFor="cf-window">{t("settings.arrival_window", "Arrival window opens")}</Label>
               <Input
                 id="cf-window"
                 type="time"
@@ -320,7 +323,7 @@ function AttendanceConfigCard({ school, canEdit }: { school: School; canEdit: bo
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cf-ontime">On-time before</Label>
+              <Label htmlFor="cf-ontime">{t("settings.on_time_before", "On-time before")}</Label>
               <Input
                 id="cf-ontime"
                 type="time"
@@ -333,7 +336,7 @@ function AttendanceConfigCard({ school, canEdit }: { school: School; canEdit: bo
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cf-late">Late until</Label>
+              <Label htmlFor="cf-late">{t("settings.late_until", "Late until")}</Label>
               <Input
                 id="cf-late"
                 type="time"
@@ -346,7 +349,7 @@ function AttendanceConfigCard({ school, canEdit }: { school: School; canEdit: bo
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="cf-end">School day ends</Label>
+              <Label htmlFor="cf-end">{t("settings.day_ends", "School day ends")}</Label>
               <Input
                 id="cf-end"
                 type="time"
@@ -360,16 +363,15 @@ function AttendanceConfigCard({ school, canEdit }: { school: School; canEdit: bo
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
-            Students' live location is visible to the school only between the
-            arrival window and the end of the school day, on school days.
+            {t("settings.location_visibility_note", "Students' live location is visible to the school only between the arrival window and the end of the school day, on school days.")}
           </p>
 
           <div className="space-y-2">
-            <Label>Holidays</Label>
+            <Label>{t("settings.holidays", "Holidays")}</Label>
             <div className="flex flex-wrap gap-2">
               {holidays.length === 0 && (
                 <span className="text-sm text-muted-foreground">
-                  No holidays set.
+                  {t("settings.no_holidays", "No holidays set.")}
                 </span>
               )}
               {holidays.map((h) => (
@@ -399,7 +401,7 @@ function AttendanceConfigCard({ school, canEdit }: { school: School; canEdit: bo
                   className="w-48"
                 />
                 <Button type="button" variant="outline" onClick={addHoliday}>
-                  Add holiday
+                  {t("settings.add_holiday", "Add holiday")}
                 </Button>
               </div>
             )}
@@ -410,13 +412,13 @@ function AttendanceConfigCard({ school, canEdit }: { school: School; canEdit: bo
             <div className="flex items-center gap-3">
               <Button type="submit" disabled={update.isPending}>
                 {update.isPending && <Loader2 className="size-4 animate-spin" />}
-                Save configuration
+                {t("settings.save_configuration", "Save configuration")}
               </Button>
               <SavedHint show={saved} />
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Only administrators can edit school settings.
+              {t("settings.admin_edit_only", "Only administrators can edit school settings.")}
             </p>
           )}
         </form>
@@ -429,6 +431,7 @@ function AttendanceConfigCard({ school, canEdit }: { school: School; canEdit: bo
 // My account
 // --------------------------------------------------------------------------- //
 function MyAccountCard() {
+  const t = useT();
   const { admin, refreshAdmin } = useAuth();
   const updateName = useUpdateMyName();
   const [name, setName] = useState(admin?.name ?? "");
@@ -449,25 +452,25 @@ function MyAccountCard() {
       await refreshAdmin();
       setSaved(true);
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Could not save.");
+      setError(err instanceof ApiClientError ? err.message : t("settings.could_not_save", "Could not save."));
     }
   };
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>My account</CardTitle>
-        <CardDescription>Your profile and password.</CardDescription>
+        <CardTitle>{t("settings.my_account", "My account")}</CardTitle>
+        <CardDescription>{t("settings.my_account_desc", "Your profile and password.")}</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="me-email">Email</Label>
+              <Label htmlFor="me-email">{t("common.email", "Email")}</Label>
               <Input id="me-email" value={admin?.email ?? ""} disabled />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="me-name">Name</Label>
+              <Label htmlFor="me-name">{t("common.name", "Name")}</Label>
               <Input
                 id="me-name"
                 value={name}
@@ -475,7 +478,7 @@ function MyAccountCard() {
                   setName(e.target.value);
                   setSaved(false);
                 }}
-                placeholder="Your name"
+                placeholder={t("settings.your_name", "Your name")}
               />
             </div>
           </div>
@@ -483,10 +486,10 @@ function MyAccountCard() {
           <div className="flex items-center gap-3">
             <Button type="submit" disabled={updateName.isPending}>
               {updateName.isPending && <Loader2 className="size-4 animate-spin" />}
-              Save
+              {t("common.save", "Save")}
             </Button>
             <Button type="button" variant="outline" onClick={() => setPwOpen(true)}>
-              Change password
+              {t("settings.change_password", "Change password")}
             </Button>
             <SavedHint show={saved} />
           </div>
@@ -498,6 +501,7 @@ function MyAccountCard() {
 }
 
 function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const change = useChangePassword();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
@@ -507,7 +511,7 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
     e.preventDefault();
     setError(null);
     if (next.length < 8) {
-      setError("New password must be at least 8 characters.");
+      setError(t("settings.pw_min", "New password must be at least 8 characters."));
       return;
     }
     try {
@@ -515,7 +519,7 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
       onClose();
     } catch (err) {
       setError(
-        err instanceof ApiClientError ? err.message : "Could not change password.",
+        err instanceof ApiClientError ? err.message : t("settings.pw_change_error", "Could not change password."),
       );
     }
   };
@@ -525,15 +529,14 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
       <DialogContent>
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>Change password</DialogTitle>
+            <DialogTitle>{t("settings.change_password", "Change password")}</DialogTitle>
             <DialogDescription>
-              Enter your current password and choose a new one (min 8
-              characters).
+              {t("settings.change_password_desc", "Enter your current password and choose a new one (min 8 characters).")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="pw-cur">Current password</Label>
+              <Label htmlFor="pw-cur">{t("settings.current_password", "Current password")}</Label>
               <Input
                 id="pw-cur"
                 type="password"
@@ -544,7 +547,7 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="pw-new">New password</Label>
+              <Label htmlFor="pw-new">{t("settings.new_password", "New password")}</Label>
               <Input
                 id="pw-new"
                 type="password"
@@ -560,11 +563,11 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={change.isPending}>
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button type="submit" disabled={change.isPending}>
               {change.isPending && <Loader2 className="size-4 animate-spin" />}
-              Update password
+              {t("settings.update_password", "Update password")}
             </Button>
           </DialogFooter>
         </form>
@@ -577,6 +580,7 @@ function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
 // Admins & staff
 // --------------------------------------------------------------------------- //
 function AdminsCard({ isAdmin, meId }: { isAdmin: boolean; meId?: string }) {
+  const t = useT();
   const admins = useAdmins();
   const setActive = useSetAdminActive();
   const manage = useManageAdmin();
@@ -592,16 +596,16 @@ function AdminsCard({ isAdmin, meId }: { isAdmin: boolean; meId?: string }) {
         <div>
           <CardTitle className="flex items-center gap-2">
             <UserCog className="size-5" />
-            Admins & staff
+            {t("settings.admins_staff", "Admins & staff")}
           </CardTitle>
           <CardDescription>
-            People who can access this school's panel.
+            {t("settings.admins_staff_desc", "People who can access this school's panel.")}
           </CardDescription>
         </div>
         {isAdmin && (
           <Button size="sm" onClick={() => setAddOpen(true)}>
             <Plus className="size-4" />
-            Add staff
+            {t("settings.add_staff", "Add staff")}
           </Button>
         )}
       </CardHeader>
@@ -616,12 +620,12 @@ function AdminsCard({ isAdmin, meId }: { isAdmin: boolean; meId?: string }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last login</TableHead>
-                {isAdmin && <TableHead className="text-right">Actions</TableHead>}
+                <TableHead>{t("common.name", "Name")}</TableHead>
+                <TableHead>{t("common.email", "Email")}</TableHead>
+                <TableHead>{t("settings.role", "Role")}</TableHead>
+                <TableHead>{t("common.status", "Status")}</TableHead>
+                <TableHead>{t("settings.last_login", "Last login")}</TableHead>
+                {isAdmin && <TableHead className="text-right">{t("common.actions", "Actions")}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -631,25 +635,25 @@ function AdminsCard({ isAdmin, meId }: { isAdmin: boolean; meId?: string }) {
                     {a.name ?? "—"}
                     {a.id === meId && (
                       <Badge variant="secondary" className="ml-2 py-0 text-[10px]">
-                        You
+                        {t("settings.you", "You")}
                       </Badge>
                     )}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{a.email}</TableCell>
                   <TableCell>
                     <Badge variant={a.role === "admin" ? "default" : "muted"}>
-                      {a.role === "admin" ? "Admin" : "Staff"}
+                      {a.role === "admin" ? t("settings.admin", "Admin") : t("settings.staff", "Staff")}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <Badge variant={a.active ? "success" : "muted"}>
-                      {a.active ? "Active" : "Inactive"}
+                      {a.active ? t("settings.active", "Active") : t("settings.inactive", "Inactive")}
                     </Badge>
                   </TableCell>
                   <TableCell className="tabular-nums text-muted-foreground">
                     {a.last_login_at
                       ? format(new Date(a.last_login_at), "d MMM yyyy, HH:mm")
-                      : "Never"}
+                      : t("settings.never", "Never")}
                   </TableCell>
                   {isAdmin && (
                     <TableCell className="text-right">
@@ -669,21 +673,25 @@ function AdminsCard({ isAdmin, meId }: { isAdmin: boolean; meId?: string }) {
                                 })
                               }
                             >
-                              Make {a.role === "admin" ? "staff" : "admin"}
+                              {a.role === "admin"
+                                ? t("settings.make_staff", "Make staff")
+                                : t("settings.make_admin", "Make admin")}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               onClick={() =>
                                 setActive.mutate({ id: a.id, active: !a.active })
                               }
                             >
-                              {a.active ? "Deactivate" : "Reactivate"}
+                              {a.active
+                                ? t("settings.deactivate", "Deactivate")
+                                : t("settings.reactivate", "Reactivate")}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
                               variant="destructive"
                               onClick={() => setDeleteFor(a)}
                             >
-                              Delete
+                              {t("common.delete", "Delete")}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -703,14 +711,15 @@ function AdminsCard({ isAdmin, meId }: { isAdmin: boolean; meId?: string }) {
       <ConfirmDialog
         open={deleteFor !== null}
         onOpenChange={(o) => !o && setDeleteFor(null)}
-        title="Delete member"
+        title={t("settings.delete_member", "Delete member")}
         description={
           <>
-            Delete <span className="font-medium">{deleteFor?.email}</span>? They
-            will lose access immediately.
+            {t("settings.delete_member_prefix", "Delete")}{" "}
+            <span className="font-medium">{deleteFor?.email}</span>
+            {t("settings.delete_member_suffix", "? They will lose access immediately.")}
           </>
         }
-        confirmLabel="Delete"
+        confirmLabel={t("common.delete", "Delete")}
         destructive
         onConfirm={() => del.mutateAsync(deleteFor!.id).then(() => setDeleteFor(null))}
       />
@@ -719,6 +728,7 @@ function AdminsCard({ isAdmin, meId }: { isAdmin: boolean; meId?: string }) {
 }
 
 function AddStaffDialog({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const invite = useInviteStaff();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -730,7 +740,7 @@ function AddStaffDialog({ onClose }: { onClose: () => void }) {
     e.preventDefault();
     setError(null);
     if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
+      setError(t("settings.password_min", "Password must be at least 8 characters."));
       return;
     }
     try {
@@ -742,7 +752,7 @@ function AddStaffDialog({ onClose }: { onClose: () => void }) {
       });
       onClose();
     } catch (err) {
-      setError(err instanceof ApiClientError ? err.message : "Could not add member.");
+      setError(err instanceof ApiClientError ? err.message : t("settings.add_member_error", "Could not add member."));
     }
   };
 
@@ -751,15 +761,14 @@ function AddStaffDialog({ onClose }: { onClose: () => void }) {
       <DialogContent>
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>Add staff / admin</DialogTitle>
+            <DialogTitle>{t("settings.add_staff_admin", "Add staff / admin")}</DialogTitle>
             <DialogDescription>
-              Create an account for a colleague. Share the password with them
-              securely — they can change it after signing in.
+              {t("settings.add_staff_desc", "Create an account for a colleague. Share the password with them securely — they can change it after signing in.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="st-email">Email</Label>
+              <Label htmlFor="st-email">{t("common.email", "Email")}</Label>
               <Input
                 id="st-email"
                 type="email"
@@ -772,9 +781,9 @@ function AddStaffDialog({ onClose }: { onClose: () => void }) {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="st-name">
-                  Name{" "}
+                  {t("common.name", "Name")}{" "}
                   <span className="font-normal text-muted-foreground">
-                    (optional)
+                    {t("settings.optional", "(optional)")}
                   </span>
                 </Label>
                 <Input
@@ -784,41 +793,41 @@ function AddStaffDialog({ onClose }: { onClose: () => void }) {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Role</Label>
+                <Label>{t("settings.role", "Role")}</Label>
                 <Select value={role} onValueChange={(v) => setRole(v as AdminRole)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="staff">Staff</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="staff">{t("settings.staff", "Staff")}</SelectItem>
+                    <SelectItem value="admin">{t("settings.admin", "Admin")}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="st-pw">Temporary password (min 8)</Label>
+              <Label htmlFor="st-pw">{t("settings.temp_password", "Temporary password (min 8)")}</Label>
               <Input
                 id="st-pw"
                 type="text"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 8 characters"
+                placeholder={t("settings.at_least_8", "At least 8 characters")}
               />
             </div>
             {error && <p className="text-sm font-medium text-destructive">{error}</p>}
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={invite.isPending}>
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button
               type="submit"
               disabled={invite.isPending || !email.trim() || password.length < 8}
             >
               {invite.isPending && <Loader2 className="size-4 animate-spin" />}
-              Add member
+              {t("settings.add_member", "Add member")}
             </Button>
           </DialogFooter>
         </form>

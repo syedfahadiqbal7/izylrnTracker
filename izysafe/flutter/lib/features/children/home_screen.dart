@@ -100,11 +100,12 @@ class _AlertsBell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final unread = ref.watch(unreadCountProvider).valueOrNull ?? 0;
+    final t = ref.watch(translatorProvider);
     return Stack(
       alignment: Alignment.center,
       children: [
         IconButton(
-          tooltip: 'Alerts',
+          tooltip: t.t('nav.alerts', 'Alerts'),
           icon: const Icon(Icons.notifications_outlined, size: 22),
           onPressed: () => context.push('/alerts'),
         ),

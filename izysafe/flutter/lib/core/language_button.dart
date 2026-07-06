@@ -11,11 +11,12 @@ class LanguageButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final current = ref.watch(localeControllerProvider);
+    final t = ref.watch(translatorProvider);
     final active = supportedLocales.firstWhere((l) => l.code == current,
         orElse: () => supportedLocales.first);
 
     return PopupMenuButton<String>(
-      tooltip: 'Language',
+      tooltip: t.t('app.language', 'Language'),
       onSelected: (code) =>
           ref.read(localeControllerProvider.notifier).set(code),
       itemBuilder: (context) => [

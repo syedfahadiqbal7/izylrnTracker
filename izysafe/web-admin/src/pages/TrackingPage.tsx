@@ -11,6 +11,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { useT } from "@/lib/i18n/I18nProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -35,10 +36,13 @@ import {
 } from "@/features/tracking/api";
 
 const MAX_TRAIL = 25;
-const ago = (iso: string | null) =>
-  iso ? `${formatDistanceToNow(new Date(iso))} ago` : "never";
+const ago = (t: ReturnType<typeof useT>, iso: string | null) =>
+  iso
+    ? `${formatDistanceToNow(new Date(iso))} ${t("tracking.ago", "ago")}`
+    : t("tracking.never", "never");
 
 export function TrackingPage() {
+  const t = useT();
   const fleet = useFleet(10_000);
   const children = useChildrenFleet(10_000);
   const [selectedBus, setSelectedBus] = useState<string | null>(null);
@@ -82,8 +86,8 @@ export function TrackingPage() {
   return (
     <>
       <PageHeader
-        title="Live Tracking"
-        description="Real-time positions of your school buses and students."
+        title={t("tracking.title", "Live Tracking")}
+        description={t("tracking.desc", "Real-time positions of your school buses and students.")}
         actions={
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -91,7 +95,7 @@ export function TrackingPage() {
                 <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400 opacity-75" />
                 <span className="relative inline-flex size-2 rounded-full bg-emerald-500" />
               </span>
-              Live
+              {t("tracking.live", "Live")}
             </span>
             <Button
               variant="outline"
@@ -108,7 +112,7 @@ export function TrackingPage() {
                     : "size-4"
                 }
               />
-              Refresh
+              {t("tracking.refresh", "Refresh")}
             </Button>
           </div>
         }
@@ -119,7 +123,7 @@ export function TrackingPage() {
           <CardContent className="py-12 text-center text-sm font-medium text-destructive">
             {fleet.error instanceof ApiClientError
               ? fleet.error.message
-              : "Failed to load live tracking."}
+              : t("tracking.load_failed", "Failed to load live tracking.")}
           </CardContent>
         </Card>
       )}
@@ -136,8 +140,7 @@ export function TrackingPage() {
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <MapPin className="size-9 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              Nothing to track yet. Register buses or enable location consent for
-              students to see them here.
+              {t("tracking.empty", "Nothing to track yet. Register buses or enable location consent for students to see them here.")}
             </p>
           </CardContent>
         </Card>
@@ -152,14 +155,14 @@ export function TrackingPage() {
                 <div className="flex gap-2">
                   <LayerToggle
                     color="#2C56EE"
-                    label="Buses"
+                    label={t("tracking.buses", "Buses")}
                     count={`${onlineBuses}/${buses.length}`}
                     on={showBuses}
                     onClick={() => setShowBuses((v) => !v)}
                   />
                   <LayerToggle
                     color="#8D03E0"
-                    label="Students"
+                    label={t("common.students", "Students")}
                     count={`${onlineKids}/${kids.length}`}
                     on={showChildren}
                     onClick={() => setShowChildren((v) => !v)}
@@ -168,7 +171,7 @@ export function TrackingPage() {
               </CardHeader>
               <div className="flex-1 space-y-4 overflow-y-auto p-3">
                 {showBuses && buses.length > 0 && (
-                  <Section title="Buses">
+                  <Section title={t("tracking.buses", "Buses")}>
                     {buses.map((b) => (
                       <BusRow
                         key={b.bus_id}
@@ -180,7 +183,7 @@ export function TrackingPage() {
                   </Section>
                 )}
                 {showChildren && kids.length > 0 && (
-                  <Section title="Students">
+                  <Section title={t("common.students", "Students")}>
                     {kids.map((c) => (
                       <ChildRow
                         key={c.child_id}
@@ -274,6 +277,7 @@ function BusRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const t = useT();
   return (
     <button
       onClick={onSelect}
@@ -290,27 +294,29 @@ function BusRow({
           {bus.bus_name}
         </span>
         <Badge variant={bus.online ? "success" : "muted"}>
-          {bus.online ? "Online" : "Offline"}
+          {bus.online ? t("common.online", "Online") : t("common.offline", "Offline")}
         </Badge>
       </div>
       <div className="mt-2 space-y-1 text-xs text-muted-foreground">
         <div className="flex items-center gap-1.5">
           <RouteIcon className="size-3" />
-          {bus.route ? bus.route.name : "No route"}
+          {bus.route ? bus.route.name : t("tracking.no_route", "No route")}
           {bus.trip?.active && (
             <Badge variant="secondary" className="ml-1 py-0 text-[10px]">
-              Trip active
+              {t("tracking.trip_active", "Trip active")}
             </Badge>
           )}
         </div>
         <div className="flex items-center gap-1.5">
           <User className="size-3" />
-          {bus.driver ? bus.driver.name : "No driver"}
-          {bus.route ? ` · ${bus.route.students} students` : ""}
+          {bus.driver ? bus.driver.name : t("tracking.no_driver", "No driver")}
+          {bus.route ? ` · ${bus.route.students} ${t("tracking.students_lc", "students")}` : ""}
         </div>
         <div className="flex items-center gap-1.5">
           <MapPin className="size-3" />
-          {bus.position ? `Updated ${ago(bus.position.timestamp)}` : "No GPS fix"}
+          {bus.position
+            ? `${t("tracking.updated", "Updated")} ${ago(t, bus.position.timestamp)}`
+            : t("tracking.no_gps_fix", "No GPS fix")}
         </div>
       </div>
     </button>
@@ -326,6 +332,7 @@ function ChildRow({
   selected: boolean;
   onSelect: () => void;
 }) {
+  const t = useT();
   return (
     <button
       onClick={onSelect}
@@ -342,7 +349,7 @@ function ChildRow({
           {child.child_name}
         </span>
         <Badge variant={child.online ? "success" : "muted"}>
-          {child.online ? "Online" : "Offline"}
+          {child.online ? t("common.online", "Online") : t("common.offline", "Offline")}
         </Badge>
       </div>
       <div className="mt-2 space-y-1 text-xs text-muted-foreground">
@@ -358,10 +365,10 @@ function ChildRow({
         <div className="flex items-center gap-1.5">
           <MapPin className="size-3" />
           {!child.in_window
-            ? "Live location paused (outside school hours)"
+            ? t("tracking.location_paused", "Live location paused (outside school hours)")
             : child.position
-              ? `Updated ${ago(child.position.timestamp)}`
-              : "No GPS fix"}
+              ? `${t("tracking.updated", "Updated")} ${ago(t, child.position.timestamp)}`
+              : t("tracking.no_gps_fix", "No GPS fix")}
         </div>
       </div>
     </button>
@@ -369,12 +376,14 @@ function ChildRow({
 }
 
 function BusDetail({ bus }: { bus: FleetBus }) {
+  const t = useT();
   const assignments = useRouteAssignments(bus.route?.id ?? null);
   const stopName = useMemo(() => {
     const m: Record<string, string> = {};
-    for (const s of bus.route?.stops ?? []) m[s.id] = `Stop ${s.seq} · ${s.name}`;
+    for (const s of bus.route?.stops ?? [])
+      m[s.id] = `${t("tracking.stop_prefix", "Stop")} ${s.seq} · ${s.name}`;
     return m;
-  }, [bus.route]);
+  }, [bus.route, t]);
 
   return (
     <Card className="mt-4">
@@ -383,42 +392,42 @@ function BusDetail({ bus }: { bus: FleetBus }) {
           <Bus className="size-4 text-primary" />
           {bus.bus_name}
           <Badge variant={bus.online ? "success" : "muted"} className="ml-1">
-            {bus.online ? "Online" : "Offline"}
+            {bus.online ? t("common.online", "Online") : t("common.offline", "Offline")}
           </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-4">
-          <Detail label="Route" value={bus.route?.name ?? "—"} />
-          <Detail label="Driver" value={bus.driver?.name ?? "—"} />
+          <Detail label={t("tracking.route", "Route")} value={bus.route?.name ?? "—"} />
+          <Detail label={t("tracking.driver", "Driver")} value={bus.driver?.name ?? "—"} />
           <Detail
-            label="Trip"
+            label={t("tracking.trip", "Trip")}
             value={
               bus.trip?.active
-                ? `Active · started ${ago(bus.trip.started_at)}`
-                : "No active trip"
+                ? `${t("tracking.active_started", "Active · started")} ${ago(t, bus.trip.started_at)}`
+                : t("tracking.no_active_trip", "No active trip")
             }
           />
-          <Detail label="Last seen" value={ago(bus.last_seen)} />
+          <Detail label={t("tracking.last_seen", "Last seen")} value={ago(t, bus.last_seen)} />
         </div>
 
         {bus.route && (
           <div>
             <p className="mb-2 text-sm font-medium">
-              Assigned students ({bus.route.students})
+              {t("tracking.assigned_students", "Assigned students")} ({bus.route.students})
             </p>
             {assignments.isLoading ? (
               <Skeleton className="h-24 w-full" />
             ) : (assignments.data?.length ?? 0) === 0 ? (
               <p className="py-4 text-sm text-muted-foreground">
-                No students assigned to this route.
+                {t("tracking.no_students_route", "No students assigned to this route.")}
               </p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Student</TableHead>
-                    <TableHead>Boarding stop</TableHead>
+                    <TableHead>{t("common.student", "Student")}</TableHead>
+                    <TableHead>{t("tracking.boarding_stop", "Boarding stop")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -441,6 +450,7 @@ function BusDetail({ bus }: { bus: FleetBus }) {
 }
 
 function ChildDetail({ child }: { child: LiveChild }) {
+  const t = useT();
   return (
     <Card className="mt-4">
       <CardHeader className="pb-3">
@@ -448,24 +458,24 @@ function ChildDetail({ child }: { child: LiveChild }) {
           <UserRound className="size-4 text-brand-violet" />
           {child.child_name}
           <Badge variant={child.online ? "success" : "muted"} className="ml-1">
-            {child.online ? "Online" : "Offline"}
+            {child.online ? t("common.online", "Online") : t("common.offline", "Offline")}
           </Badge>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-4">
-          <Detail label="Class / grade" value={child.class_grade ?? "—"} />
-          <Detail label="Device" value={child.device_name ?? "—"} />
+          <Detail label={t("tracking.class_grade", "Class / grade")} value={child.class_grade ?? "—"} />
+          <Detail label={t("tracking.device", "Device")} value={child.device_name ?? "—"} />
           <Detail
-            label="Battery"
+            label={t("tracking.battery", "Battery")}
             value={child.battery != null ? `${child.battery}%` : "—"}
           />
-          <Detail label="Last seen" value={ago(child.last_seen)} />
+          <Detail label={t("tracking.last_seen", "Last seen")} value={ago(t, child.last_seen)} />
         </div>
         {!child.in_window && (
           <p className="flex items-center gap-1.5 rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
             <Clock className="size-4" />
-            Live location is only shown during school hours on school days.
+            {t("tracking.school_hours_note", "Live location is only shown during school hours on school days.")}
           </p>
         )}
       </CardContent>

@@ -6,6 +6,7 @@ import { useT } from "@/lib/i18n/I18nProvider";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { ThemeToggle } from "./ThemeToggle";
 import { SidebarContent } from "./Sidebar";
 
 export function Topbar() {
@@ -46,6 +47,7 @@ export function Topbar() {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3">
+        <ThemeToggle />
         <LanguageSwitcher />
         <div className="flex items-center gap-2 text-sm">
           <UserRound className="size-4 text-muted-foreground" />

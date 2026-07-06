@@ -109,7 +109,7 @@ export function RosterPage() {
         actions={
           <Button onClick={() => setAddOpen(true)}>
             <Plus className="size-4" />
-            Add student
+            {t("roster.add_student", "Add student")}
           </Button>
         }
       />
@@ -118,7 +118,7 @@ export function RosterPage() {
       <Card className="mb-6">
         <CardContent className="flex flex-wrap items-end gap-4 pt-6">
           <div className="space-y-2">
-            <Label>Search</Label>
+            <Label>{t("common.search", "Search")}</Label>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
               <Input
@@ -130,13 +130,13 @@ export function RosterPage() {
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Class / grade</Label>
+            <Label>{t("att.class_grade", "Class / grade")}</Label>
             <Select value={classGrade} onValueChange={setClassGrade}>
               <SelectTrigger className="w-44">
                 <SelectValue placeholder={t("common.all_classes", "All classes")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>All classes</SelectItem>
+                <SelectItem value={ALL}>{t("common.all_classes", "All classes")}</SelectItem>
                 {grades.data?.map((g) => (
                   <SelectItem key={g} value={g}>
                     {g}
@@ -146,7 +146,7 @@ export function RosterPage() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Consent</Label>
+            <Label>{t("roster.consent", "Consent")}</Label>
             <Select
               value={consent}
               onValueChange={(v) => setConsent(v as ConsentFilter)}
@@ -155,9 +155,9 @@ export function RosterPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All</SelectItem>
-                <SelectItem value="consented">Consented</SelectItem>
-                <SelectItem value="pending">Pending</SelectItem>
+                <SelectItem value="all">{t("common.all", "All")}</SelectItem>
+                <SelectItem value="consented">{t("roster.consented", "Consented")}</SelectItem>
+                <SelectItem value="pending">{t("roster.pending", "Pending")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -169,7 +169,7 @@ export function RosterPage() {
           <CardContent className="py-12 text-center text-sm font-medium text-destructive">
             {roster.error instanceof ApiClientError
               ? roster.error.message
-              : "Failed to load the roster."}
+              : t("roster.load_error", "Failed to load the roster.")}
           </CardContent>
         </Card>
       )}
@@ -192,7 +192,7 @@ export function RosterPage() {
                 <UserPlus className="size-9 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
                   {q || classGrade !== ALL || consent !== "all"
-                    ? "No students match these filters."
+                    ? t("roster.no_match", "No students match these filters.")
                     : t("roster.empty", "No students enrolled yet.")}
                 </p>
               </div>
@@ -201,13 +201,13 @@ export function RosterPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Class</TableHead>
-                      <TableHead>Parent</TableHead>
-                      <TableHead>Contact</TableHead>
-                      <TableHead>Bus</TableHead>
-                      <TableHead>Consent</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      <TableHead>{t("common.student", "Student")}</TableHead>
+                      <TableHead>{t("common.class", "Class")}</TableHead>
+                      <TableHead>{t("roster.parent", "Parent")}</TableHead>
+                      <TableHead>{t("roster.contact", "Contact")}</TableHead>
+                      <TableHead>{t("roster.bus", "Bus")}</TableHead>
+                      <TableHead>{t("roster.consent", "Consent")}</TableHead>
+                      <TableHead className="text-right">{t("common.actions", "Actions")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -227,7 +227,7 @@ export function RosterPage() {
                           {r.bus_opt_in ? (
                             <Badge variant="secondary" className="gap-1">
                               <Bus className="size-3" />
-                              Yes
+                              {t("roster.yes", "Yes")}
                             </Badge>
                           ) : (
                             <span className="text-muted-foreground">—</span>
@@ -238,18 +238,18 @@ export function RosterPage() {
                             {r.parent_opt_in ? (
                               <Badge variant="success" className="gap-1">
                                 <Check className="size-3" />
-                                Consented
+                                {t("roster.consented", "Consented")}
                               </Badge>
                             ) : (
                               <Badge variant="warning" className="gap-1">
                                 <Clock className="size-3" />
-                                Pending
+                                {t("roster.pending", "Pending")}
                               </Badge>
                             )}
                             {r.location_opt_in && (
                               <Badge variant="secondary" className="gap-1">
                                 <MapPin className="size-3" />
-                                Location
+                                {t("roster.location", "Location")}
                               </Badge>
                             )}
                           </div>
@@ -259,13 +259,13 @@ export function RosterPage() {
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon">
                                 <MoreHorizontal className="size-4" />
-                                <span className="sr-only">Open actions</span>
+                                <span className="sr-only">{t("roster.open_actions", "Open actions")}</span>
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => setEditFor(r)}>
                                 <Pencil className="size-4" />
-                                Edit class / grade
+                                {t("roster.edit_class", "Edit class / grade")}
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
@@ -273,7 +273,7 @@ export function RosterPage() {
                                 onClick={() => setRemoveFor(r)}
                               >
                                 <Trash2 className="size-4" />
-                                Remove from roster
+                                {t("roster.remove_from_roster", "Remove from roster")}
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -285,7 +285,7 @@ export function RosterPage() {
 
                 <div className="mt-4 flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">
-                    {from}–{to} of {total}
+                    {from}–{to} {t("roster.of", "of")} {total}
                   </p>
                   <div className="flex gap-2">
                     <Button
@@ -294,7 +294,7 @@ export function RosterPage() {
                       disabled={page === 0 || roster.isFetching}
                       onClick={() => setPage((p) => Math.max(0, p - 1))}
                     >
-                      Previous
+                      {t("roster.previous", "Previous")}
                     </Button>
                     <Button
                       variant="outline"
@@ -302,7 +302,7 @@ export function RosterPage() {
                       disabled={to >= total || roster.isFetching}
                       onClick={() => setPage((p) => p + 1)}
                     >
-                      Next
+                      {t("roster.next", "Next")}
                     </Button>
                   </div>
                 </div>
@@ -329,6 +329,7 @@ function AddStudentDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const t = useT();
   const enroll = useEnrollStudent();
   const [phone, setPhone] = useState("");
   const [childName, setChildName] = useState("");
@@ -359,7 +360,7 @@ function AddStudentDialog({
       setError(
         err instanceof ApiClientError
           ? err.message
-          : "Could not enroll the student.",
+          : t("roster.enroll_error", "Could not enroll the student."),
       );
     }
   };
@@ -369,17 +370,17 @@ function AddStudentDialog({
       <DialogContent>
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>Add student</DialogTitle>
+            <DialogTitle>{t("roster.add_student", "Add student")}</DialogTitle>
             <DialogDescription>
-              Enroll a student by their parent's phone number. The parent must
-              already use the IzySafe app, and approves visibility from their
-              side — the enrollment starts as <b>Pending</b> consent.
+              {t("roster.add_desc_pre", "Enroll a student by their parent's phone number. The parent must already use the IzySafe app, and approves visibility from their side — the enrollment starts as")}{" "}
+              <b>{t("roster.pending", "Pending")}</b>{" "}
+              {t("roster.add_desc_post", "consent.")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="s-phone">Parent phone</Label>
+              <Label htmlFor="s-phone">{t("roster.parent_phone", "Parent phone")}</Label>
               <Input
                 id="s-phone"
                 required
@@ -390,30 +391,30 @@ function AddStudentDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor="s-child">
-                Student name{" "}
+                {t("roster.student_name", "Student name")}{" "}
                 <span className="font-normal text-muted-foreground">
-                  (required if the parent has more than one child)
+                  ({t("roster.student_name_hint", "required if the parent has more than one child")})
                 </span>
               </Label>
               <Input
                 id="s-child"
                 value={childName}
                 onChange={(e) => setChildName(e.target.value)}
-                placeholder="e.g. Aarav"
+                placeholder={t("roster.eg_aarav", "e.g. Aarav")}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="s-class">
-                Class / grade{" "}
+                {t("att.class_grade", "Class / grade")}{" "}
                 <span className="font-normal text-muted-foreground">
-                  (optional)
+                  ({t("roster.optional", "optional")})
                 </span>
               </Label>
               <Input
                 id="s-class"
                 value={classGrade}
                 onChange={(e) => setClassGrade(e.target.value)}
-                placeholder="e.g. 5A"
+                placeholder={t("roster.eg_5a", "e.g. 5A")}
               />
             </div>
             {error && (
@@ -428,11 +429,11 @@ function AddStudentDialog({
               onClick={onClose}
               disabled={enroll.isPending}
             >
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button type="submit" disabled={enroll.isPending || !phone.trim()}>
               {enroll.isPending && <Loader2 className="size-4 animate-spin" />}
-              Add student
+              {t("roster.add_student", "Add student")}
             </Button>
           </DialogFooter>
         </form>
@@ -448,6 +449,7 @@ function EditClassDialog({
   enrollment: Enrollment | null;
   onClose: () => void;
 }) {
+  const t = useT();
   const update = useUpdateEnrollment();
   const [classGrade, setClassGrade] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -473,7 +475,7 @@ function EditClassDialog({
       setError(
         err instanceof ApiClientError
           ? err.message
-          : "Could not save the change.",
+          : t("roster.save_change_error", "Could not save the change."),
       );
     }
   };
@@ -483,21 +485,20 @@ function EditClassDialog({
       <DialogContent>
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>Edit class / grade</DialogTitle>
+            <DialogTitle>{t("roster.edit_class", "Edit class / grade")}</DialogTitle>
             <DialogDescription>
-              {enrollment?.child_name} — the student's name and profile are
-              managed by their parent.
+              {enrollment?.child_name} {t("roster.edit_class_desc", "— the student's name and profile are managed by their parent.")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2 py-4">
-            <Label htmlFor="e-class">Class / grade</Label>
+            <Label htmlFor="e-class">{t("att.class_grade", "Class / grade")}</Label>
             <Input
               id="e-class"
               autoFocus
               value={classGrade}
               onChange={(e) => setClassGrade(e.target.value)}
-              placeholder="e.g. 6B"
+              placeholder={t("roster.eg_6b", "e.g. 6B")}
             />
             {error && (
               <p className="text-sm font-medium text-destructive">{error}</p>
@@ -511,11 +512,11 @@ function EditClassDialog({
               onClick={onClose}
               disabled={update.isPending}
             >
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button type="submit" disabled={update.isPending}>
               {update.isPending && <Loader2 className="size-4 animate-spin" />}
-              Save
+              {t("common.save", "Save")}
             </Button>
           </DialogFooter>
         </form>
@@ -531,6 +532,7 @@ function RemoveStudentDialog({
   enrollment: Enrollment | null;
   onClose: () => void;
 }) {
+  const t = useT();
   const remove = useRemoveEnrollment();
   const [error, setError] = useState<string | null>(null);
 
@@ -544,7 +546,7 @@ function RemoveStudentDialog({
       setError(
         err instanceof ApiClientError
           ? err.message
-          : "Could not remove the student.",
+          : t("roster.remove_error", "Could not remove the student."),
       );
     }
   };
@@ -553,11 +555,11 @@ function RemoveStudentDialog({
     <Dialog open={enrollment !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Remove student</DialogTitle>
+          <DialogTitle>{t("roster.remove_student", "Remove student")}</DialogTitle>
           <DialogDescription>
-            Remove <span className="font-medium">{enrollment?.child_name}</span>{" "}
-            from the roster? Their attendance history is retained, but the school
-            will no longer see this student.
+            {t("roster.remove_desc_pre", "Remove")}{" "}
+            <span className="font-medium">{enrollment?.child_name}</span>{" "}
+            {t("roster.remove_desc_post", "from the roster? Their attendance history is retained, but the school will no longer see this student.")}
           </DialogDescription>
         </DialogHeader>
         {error && (
@@ -569,7 +571,7 @@ function RemoveStudentDialog({
             onClick={onClose}
             disabled={remove.isPending}
           >
-            Cancel
+            {t("common.cancel", "Cancel")}
           </Button>
           <Button
             variant="destructive"
@@ -577,7 +579,7 @@ function RemoveStudentDialog({
             disabled={remove.isPending}
           >
             {remove.isPending && <Loader2 className="size-4 animate-spin" />}
-            Remove
+            {t("roster.remove", "Remove")}
           </Button>
         </DialogFooter>
       </DialogContent>
