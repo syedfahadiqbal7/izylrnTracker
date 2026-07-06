@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
+import { useT } from "@/lib/i18n/I18nProvider";
 import { ApiClientError } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +16,7 @@ import { Label } from "@/components/ui/label";
 
 export function LoginPage() {
   const { status, login } = useAuth();
+  const t = useT();
   const navigate = useNavigate();
   const location = useLocation();
   const from = (location.state as { from?: string } | null)?.from ?? "/";
@@ -39,11 +41,11 @@ export function LoginPage() {
       if (err instanceof ApiClientError) {
         setError(
           err.code === "INVALID_CREDENTIALS" || err.status === 401
-            ? "Incorrect email or password."
+            ? t("login.incorrect", "Incorrect email or password.")
             : err.message,
         );
       } else {
-        setError("Something went wrong. Please try again.");
+        setError(t("common.error_generic", "Something went wrong. Please try again."));
       }
     } finally {
       setSubmitting(false);
@@ -67,13 +69,13 @@ export function LoginPage() {
             izy<span className="text-brand-gradient">Lrn</span>
           </CardTitle>
           <CardDescription>
-            School Admin — sign in to your dashboard
+            {t("login.subtitle", "School Admin — sign in to your dashboard")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t("common.email", "Email")}</Label>
               <Input
                 id="email"
                 type="email"
@@ -85,7 +87,7 @@ export function LoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t("common.password", "Password")}</Label>
               <Input
                 id="password"
                 type="password"
@@ -99,7 +101,7 @@ export function LoginPage() {
               <p className="text-sm font-medium text-destructive">{error}</p>
             )}
             <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? "Signing in…" : "Sign in"}
+              {submitting ? t("login.signing_in", "Signing in…") : t("login.sign_in", "Sign in")}
             </Button>
           </form>
         </CardContent>

@@ -11,6 +11,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { useT } from "@/lib/i18n/I18nProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -56,6 +57,7 @@ function fmtLastLogin(iso: string | null) {
 }
 
 export function DriversPage() {
+  const t = useT();
   const drivers = useDrivers();
   const setActive = useSetActive();
   const [addOpen, setAddOpen] = useState(false);
@@ -67,8 +69,8 @@ export function DriversPage() {
   return (
     <>
       <PageHeader
-        title="Drivers"
-        description="Bus drivers for your school, their access codes, and login activity."
+        title={t("drivers.title", "Drivers")}
+        description={t("drivers.desc", "Bus drivers for your school, their access codes, and login activity.")}
         actions={
           <Button onClick={() => setAddOpen(true)}>
             <Plus className="size-4" />
@@ -104,7 +106,7 @@ export function DriversPage() {
               <div className="flex flex-col items-center gap-3 py-14 text-center">
                 <UserPlus className="size-9 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
-                  No drivers yet. Add your first driver to get started.
+                  {t("drivers.empty", "No drivers yet. Add your first driver to get started.")}
                 </p>
                 <Button variant="outline" onClick={() => setAddOpen(true)}>
                   <Plus className="size-4" />

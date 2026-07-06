@@ -3,6 +3,7 @@ import type { DateRange } from "react-day-picker";
 import { addDays, format } from "date-fns";
 import { Download, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { useT } from "@/lib/i18n/I18nProvider";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -70,6 +71,7 @@ function rateVariant(rate: number): "success" | "warning" | "destructive" {
 }
 
 export function ReportsPage() {
+  const t = useT();
   const [range, setRange] = useState<DateRange | undefined>(() => {
     const today = new Date();
     return { from: addDays(today, -29), to: today };
@@ -113,8 +115,8 @@ export function ReportsPage() {
   return (
     <>
       <PageHeader
-        title="Attendance Report"
-        description="Date-range summary and per-student rollup across the attendance register."
+        title={t("reports.title", "Attendance Report")}
+        description={t("reports.desc", "Date-range summary and per-student rollup across the attendance register.")}
         actions={
           <Button
             onClick={onExport}
@@ -141,7 +143,7 @@ export function ReportsPage() {
             <Label>Class / grade</Label>
             <Select value={classGrade} onValueChange={setClassGrade}>
               <SelectTrigger className="w-56">
-                <SelectValue placeholder="All classes" />
+                <SelectValue placeholder={t("common.all_classes", "All classes")} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>All classes</SelectItem>

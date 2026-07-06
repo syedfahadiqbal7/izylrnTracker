@@ -11,6 +11,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { useT } from "@/lib/i18n/I18nProvider";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -71,11 +72,12 @@ import {
 const NONE = "__none__";
 
 export function RoutesPage() {
+  const t = useT();
   return (
     <>
       <PageHeader
-        title="Routes & Buses"
-        description="Bus devices, routes, stops, and student assignments."
+        title={t("routes.title", "Routes & Buses")}
+        description={t("routes.desc", "Bus devices, routes, stops, and student assignments.")}
       />
       <Tabs defaultValue="routes">
         <TabsList>

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { format } from "date-fns";
 import { Loader2, PencilLine, RefreshCw } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { useT } from "@/lib/i18n/I18nProvider";
 import { DatePicker } from "@/components/DatePicker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -60,6 +61,7 @@ function fmtTime(iso: string | null, tz: string | undefined) {
 }
 
 export function AttendancePage() {
+  const t = useT();
   const [date, setDate] = useState<Date>(() => new Date());
   const [classGrade, setClassGrade] = useState<string>(ALL);
   const [editRow, setEditRow] = useState<DailyRegisterRow | null>(null);
@@ -86,8 +88,8 @@ export function AttendancePage() {
   return (
     <>
       <PageHeader
-        title="Daily Attendance"
-        description="The register for a single day — every consented student's status."
+        title={t("attendance.title", "Daily Attendance")}
+        description={t("attendance.desc", "The register for a single day — every consented student's status.")}
         actions={
           <Button
             variant="outline"
@@ -113,7 +115,7 @@ export function AttendancePage() {
             <Label>Class / grade</Label>
             <Select value={classGrade} onValueChange={setClassGrade}>
               <SelectTrigger className="w-56">
-                <SelectValue placeholder="All classes" />
+                <SelectValue placeholder={t("common.all_classes", "All classes")} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>All classes</SelectItem>

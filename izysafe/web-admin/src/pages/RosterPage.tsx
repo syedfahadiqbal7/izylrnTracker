@@ -13,6 +13,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { useT } from "@/lib/i18n/I18nProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -66,6 +67,7 @@ const PAGE_SIZE = 20;
 type ConsentFilter = "all" | "consented" | "pending";
 
 export function RosterPage() {
+  const t = useT();
   const [search, setSearch] = useState("");
   const q = useDebouncedValue(search.trim(), 300);
   const [classGrade, setClassGrade] = useState<string>(ALL);
@@ -102,8 +104,8 @@ export function RosterPage() {
   return (
     <>
       <PageHeader
-        title="Roster"
-        description="Enrolled students, parent contacts, and consent status. Assign students to bus stops under Routes & Buses."
+        title={t("roster.title", "Roster")}
+        description={t("roster.desc", "Enrolled students, parent contacts, and consent status. Assign students to bus stops under Routes & Buses.")}
         actions={
           <Button onClick={() => setAddOpen(true)}>
             <Plus className="size-4" />
@@ -122,7 +124,7 @@ export function RosterPage() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Student name…"
+                placeholder={t("roster.search_name", "Student name…")}
                 className="w-64 pl-8"
               />
             </div>
@@ -131,7 +133,7 @@ export function RosterPage() {
             <Label>Class / grade</Label>
             <Select value={classGrade} onValueChange={setClassGrade}>
               <SelectTrigger className="w-44">
-                <SelectValue placeholder="All classes" />
+                <SelectValue placeholder={t("common.all_classes", "All classes")} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value={ALL}>All classes</SelectItem>
@@ -191,7 +193,7 @@ export function RosterPage() {
                 <p className="text-sm text-muted-foreground">
                   {q || classGrade !== ALL || consent !== "all"
                     ? "No students match these filters."
-                    : "No students enrolled yet."}
+                    : t("roster.empty", "No students enrolled yet.")}
                 </p>
               </div>
             ) : (

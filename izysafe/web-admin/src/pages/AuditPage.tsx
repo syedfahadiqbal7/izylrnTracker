@@ -3,6 +3,7 @@ import type { DateRange } from "react-day-picker";
 import { endOfDay, format, startOfDay } from "date-fns";
 import { Download, Loader2, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/auth/useAuth";
+import { useT } from "@/lib/i18n/I18nProvider";
 import { PageHeader } from "@/components/PageHeader";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { Badge } from "@/components/ui/badge";
@@ -53,6 +54,7 @@ function renderDetails(details: Record<string, unknown> | null) {
 
 export function AuditPage() {
   const { admin } = useAuth();
+  const t = useT();
   const [range, setRange] = useState<DateRange | undefined>();
   const [actor, setActor] = useState<string>(ALL);
   const [action, setAction] = useState<string>(ALL);
@@ -78,12 +80,12 @@ export function AuditPage() {
   if (admin?.role !== "admin") {
     return (
       <>
-        <PageHeader title="Audit Log" description="The school's activity trail." />
+        <PageHeader title={t("audit.title", "Audit Log")} description={t("audit.trail", "The school's activity trail.")} />
         <Card>
           <CardContent className="flex flex-col items-center gap-3 py-16 text-center">
             <ShieldAlert className="size-9 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              The audit log is available to administrators only.
+              {t("audit.admin_only", "The audit log is available to administrators only.")}
             </p>
           </CardContent>
         </Card>
@@ -121,6 +123,7 @@ interface ContentProps {
 }
 
 function AuditContent(p: ContentProps) {
+  const t = useT();
   const params = { ...p.filters, limit: PAGE_SIZE, offset: p.page * PAGE_SIZE };
   const audit = useAudit(params);
 
@@ -136,7 +139,7 @@ function AuditContent(p: ContentProps) {
       await downloadAuditCsv(p.filters);
     } catch (err) {
       p.setExportError(
-        err instanceof ApiClientError ? err.message : "Could not export the log.",
+        err instanceof ApiClientError ? err.message : t("audit.export_error", "Could not export the log."),
       );
     } finally {
       p.setExporting(false);
@@ -146,8 +149,8 @@ function AuditContent(p: ContentProps) {
   return (
     <>
       <PageHeader
-        title="Audit Log"
-        description="Every recorded action in your school, newest first."
+        title={t("audit.title", "Audit Log")}
+        description={t("audit.desc", "Every recorded action in your school, newest first.")}
         actions={
           <Button onClick={onExport} disabled={p.exporting}>
             {p.exporting ? (
@@ -155,7 +158,7 @@ function AuditContent(p: ContentProps) {
             ) : (
               <Download className="size-4" />
             )}
-            Export CSV
+            {t("audit.export", "Export CSV")}
           </Button>
         }
       />
@@ -164,33 +167,36 @@ function AuditContent(p: ContentProps) {
       <Card className="mb-6">
         <CardContent className="flex flex-wrap items-end gap-4 pt-6">
           <div className="space-y-2">
-            <Label>Date range</Label>
+            <Label>{t("common.date_range", "Date range")}</Label>
             <DateRangePicker value={p.range} onChange={p.setRange} />
           </div>
           <FilterSelect
-            label="Actor"
+            label={t("audit.actor", "Actor")}
             value={p.actor}
             onChange={p.setActor}
+            allLabel={t("common.all", "All")}
             options={[
-              { value: "school_admin", label: "Admin" },
-              { value: "driver", label: "Driver" },
-              { value: "parent", label: "Parent" },
+              { value: "school_admin", label: t("audit.admin", "Admin") },
+              { value: "driver", label: t("nav.drivers", "Driver") },
+              { value: "parent", label: t("audit.parent", "Parent") },
             ]}
           />
           <FilterSelect
-            label="Action"
+            label={t("audit.action", "Action")}
             value={p.action}
             onChange={p.setAction}
             width="w-56"
+            allLabel={t("common.all", "All")}
             options={FILTERABLE_ACTIONS.map((a) => ({
               value: a,
               label: actionLabel(a),
             }))}
           />
           <FilterSelect
-            label="Entity"
+            label={t("audit.entity", "Entity")}
             value={p.entity}
             onChange={p.setEntity}
+            allLabel={t("common.all", "All")}
             options={ENTITY_TYPES.map((e) => ({ value: e, label: entityLabel(e) }))}
           />
         </CardContent>
@@ -205,7 +211,7 @@ function AuditContent(p: ContentProps) {
           <CardContent className="py-12 text-center text-sm font-medium text-destructive">
             {audit.error instanceof ApiClientError
               ? audit.error.message
-              : "Failed to load the audit log."}
+              : t("audit.load_error", "Failed to load the audit log.")}
           </CardContent>
         </Card>
       )}
@@ -225,18 +231,18 @@ function AuditContent(p: ContentProps) {
           <CardContent className="pt-6">
             {rows.length === 0 ? (
               <p className="py-12 text-center text-sm text-muted-foreground">
-                No audit entries match these filters.
+                {t("audit.no_results", "No audit entries match these filters.")}
               </p>
             ) : (
               <>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-44">When</TableHead>
-                      <TableHead>Actor</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Entity</TableHead>
-                      <TableHead>Details</TableHead>
+                      <TableHead className="w-44">{t("audit.when", "When")}</TableHead>
+                      <TableHead>{t("audit.actor", "Actor")}</TableHead>
+                      <TableHead>{t("audit.action", "Action")}</TableHead>
+                      <TableHead>{t("audit.entity", "Entity")}</TableHead>
+                      <TableHead>{t("audit.details", "Details")}</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -248,7 +254,7 @@ function AuditContent(p: ContentProps) {
 
                 <div className="mt-4 flex items-center justify-between">
                   <p className="text-sm text-muted-foreground">
-                    {from}–{to} of {total}
+                    {from}–{to} {t("common.of", "of")} {total}
                   </p>
                   <div className="flex gap-2">
                     <Button
@@ -257,7 +263,7 @@ function AuditContent(p: ContentProps) {
                       disabled={p.page === 0 || audit.isFetching}
                       onClick={() => p.setPage((n) => Math.max(0, n - 1))}
                     >
-                      Previous
+                      {t("common.previous", "Previous")}
                     </Button>
                     <Button
                       variant="outline"
@@ -265,7 +271,7 @@ function AuditContent(p: ContentProps) {
                       disabled={to >= total || audit.isFetching}
                       onClick={() => p.setPage((n) => n + 1)}
                     >
-                      Next
+                      {t("common.next", "Next")}
                     </Button>
                   </div>
                 </div>
@@ -305,12 +311,14 @@ function FilterSelect({
   value,
   onChange,
   options,
+  allLabel = "All",
   width = "w-40",
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
+  allLabel?: string;
   width?: string;
 }) {
   return (
@@ -318,10 +326,10 @@ function FilterSelect({
       <Label>{label}</Label>
       <Select value={value} onValueChange={onChange}>
         <SelectTrigger className={width}>
-          <SelectValue placeholder="All" />
+          <SelectValue placeholder={allLabel} />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={ALL}>All</SelectItem>
+          <SelectItem value={ALL}>{allLabel}</SelectItem>
           {options.map((o) => (
             <SelectItem key={o.value} value={o.value}>
               {o.label}
