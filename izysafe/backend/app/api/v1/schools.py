@@ -51,8 +51,19 @@ from app.schemas.school import (
     StaffInviteRequest,
     TokenPairResponse,
 )
+from app.schemas.i18n import (
+    MenuItemCreateRequest,
+    MenuItemResponse,
+    MenuItemUpdateRequest,
+    MenuNavItem,
+    MenuReorderRequest,
+    TranslationCreateRequest,
+    TranslationResponse,
+    TranslationUpsertRequest,
+)
 from app.services.attendance_service import AttendanceService
 from app.services.audit_service import AuditService
+from app.services.i18n_service import I18nService
 from app.services.dashboard_service import DashboardService
 from app.core.errors import APIException
 from app.services.email_gateway import EmailGateway
@@ -61,6 +72,11 @@ from app.services.password_reset_service import PasswordResetService
 from app.services.school_service import SchoolAuthService, SchoolService
 
 router = APIRouter(prefix="/schools", tags=["schools"])
+
+
+def _require_admin(admin: SchoolAdmin) -> None:
+    if admin.role != "admin":
+        raise APIException(403, "FORBIDDEN", "This action requires an admin role")
 
 
 def _admin(a: SchoolAdmin) -> dict:
@@ -530,3 +546,134 @@ async def set_manual_attendance(
         admin, enrollment_id, payload.date, payload.status, payload.arrival_time
     )
     return success(AttendanceRecordResponse.model_validate(rec).model_dump(mode="json"))
+
+
+# --------------------------------------------------------------------------- #
+# Dynamic navigation (Sprint 11, F23) — the sidebar the caller may see
+# --------------------------------------------------------------------------- #
+@router.get("/menu")
+async def my_menu(
+    platform: str = Query("web"),
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """The visible, role-permitted navigation items for the caller — drives the sidebar."""
+    rows = await I18nService(db).nav_for(admin.role, platform)
+    return success([MenuNavItem.model_validate(m).model_dump(mode="json") for m in rows])
+
+
+# --------------------------------------------------------------------------- #
+# Localization management (Sprint 11, F23) — role='admin'
+# --------------------------------------------------------------------------- #
+@router.get("/localization")
+async def list_translations(
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Every translation key across all locales (localization editor)."""
+    _require_admin(admin)
+    rows = await I18nService(db).list_translations()
+    return success([TranslationResponse.model_validate(r).model_dump(mode="json") for r in rows])
+
+
+@router.post("/localization", status_code=201)
+async def create_translation(
+    payload: TranslationCreateRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Add a new translation key (upsert semantics — safe to re-save)."""
+    _require_admin(admin)
+    row = await I18nService(db).upsert_translation(
+        payload.key, payload.en, payload.hi, payload.ar
+    )
+    return success(TranslationResponse.model_validate(row).model_dump(mode="json"))
+
+
+@router.put("/localization/{key}")
+async def update_translation(
+    key: str,
+    payload: TranslationUpsertRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Edit a key's values across locales."""
+    _require_admin(admin)
+    row = await I18nService(db).upsert_translation(key, payload.en, payload.hi, payload.ar)
+    return success(TranslationResponse.model_validate(row).model_dump(mode="json"))
+
+
+@router.delete("/localization/{key}")
+async def delete_translation(
+    key: str,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Remove a translation key."""
+    _require_admin(admin)
+    await I18nService(db).delete_translation(key)
+    return success({"success": True})
+
+
+# --------------------------------------------------------------------------- #
+# Menu management (Sprint 11, F23) — role='admin'
+# --------------------------------------------------------------------------- #
+@router.get("/menu-items")
+async def list_menu_items(
+    platform: str = Query("web"),
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Every menu item (incl. hidden) for the management table."""
+    _require_admin(admin)
+    rows = await I18nService(db).list_menu(platform)
+    return success([MenuItemResponse.model_validate(m).model_dump(mode="json") for m in rows])
+
+
+@router.post("/menu-items", status_code=201)
+async def create_menu_item(
+    payload: MenuItemCreateRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Create a navigation item."""
+    _require_admin(admin)
+    item = await I18nService(db).create_menu(payload.model_dump())
+    return success(MenuItemResponse.model_validate(item).model_dump(mode="json"))
+
+
+@router.put("/menu-items/reorder")
+async def reorder_menu_items(
+    payload: MenuReorderRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Persist a new item order (index → sort_order)."""
+    _require_admin(admin)
+    rows = await I18nService(db).reorder_menu(payload.ids)
+    return success([MenuItemResponse.model_validate(m).model_dump(mode="json") for m in rows])
+
+
+@router.patch("/menu-items/{item_id}")
+async def update_menu_item(
+    item_id: uuid.UUID,
+    payload: MenuItemUpdateRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Edit an item (label/icon/path/roles/visibility/order)."""
+    _require_admin(admin)
+    item = await I18nService(db).update_menu(item_id, payload.model_dump(exclude_unset=True))
+    return success(MenuItemResponse.model_validate(item).model_dump(mode="json"))
+
+
+@router.delete("/menu-items/{item_id}")
+async def delete_menu_item(
+    item_id: uuid.UUID,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Delete a navigation item."""
+    _require_admin(admin)
+    await I18nService(db).delete_menu(item_id)
+    return success({"success": True})

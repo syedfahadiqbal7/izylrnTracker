@@ -576,14 +576,38 @@ CREATE TABLE wearable_integrations (
 );
 
 -- ============================================================================
--- 12. i18n — translation strings (F23)
+-- 12. i18n — translation strings + dynamic menus (F23), admin-managed
 -- ============================================================================
+-- Wide format: one row per key, one column per supported locale. The admin
+-- localization editor edits a row across all languages; GET /i18n/{locale} is a
+-- single-column projection served to both the Web Admin Panel and the mobile app.
 CREATE TABLE translations (
-    key   VARCHAR(120) PRIMARY KEY,
-    en    TEXT NOT NULL,
-    hi    TEXT,
-    ar    TEXT
+    key        VARCHAR(120) PRIMARY KEY,
+    en         TEXT NOT NULL,
+    hi         TEXT,
+    ar         TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()   -- last edit (Sprint 11, migration 0012)
 );
+
+-- Admin-managed navigation (Sprint 11, migration 0012). Drives the Web Admin
+-- sidebar (and later the mobile nav) dynamically: create/reorder/show-hide items
+-- and restrict by role — all from the panel. `label_key` → a translations row;
+-- `icon` is a lucide icon name resolved client-side; `roles` = roles allowed to
+-- see the item (empty ⇒ everyone). App-wide config (not school-scoped).
+CREATE TABLE menu_items (
+    id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    item_key    VARCHAR(60)  NOT NULL UNIQUE,
+    label_key   VARCHAR(120) NOT NULL,
+    icon        VARCHAR(40),
+    path        VARCHAR(120) NOT NULL,
+    platform    VARCHAR(10)  NOT NULL DEFAULT 'web' CHECK (platform IN ('web','mobile')),
+    sort_order  INTEGER      NOT NULL DEFAULT 0,
+    visible     BOOLEAN      NOT NULL DEFAULT TRUE,
+    roles       JSONB        NOT NULL DEFAULT '["admin","staff"]'::jsonb,
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_menu_items_platform ON menu_items (platform, sort_order);
 
 -- ============================================================================
 -- 13. SCHOOL TIER — admin, enrollment, attendance, buses (F26–F28)

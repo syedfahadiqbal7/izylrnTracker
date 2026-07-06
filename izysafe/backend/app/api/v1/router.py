@@ -15,6 +15,7 @@ from app.api.v1 import (
     enrollments,
     family,
     geofences,
+    i18n,
     routes,
     schools,
     share,
@@ -35,6 +36,7 @@ api_router.include_router(emergency.router)
 api_router.include_router(enrollments.router)
 api_router.include_router(family.router)
 api_router.include_router(geofences.router)
+api_router.include_router(i18n.router)
 api_router.include_router(routes.router)
 api_router.include_router(schools.router)
 api_router.include_router(share.router)
