@@ -2,6 +2,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -130,6 +131,8 @@ class _LiveMapScreenState extends ConsumerState<LiveMapScreen> {
               locationLoading: location.isLoading && loc == null,
               bus: bus,
               geofenceCount: geofences.length,
+              onManageZones: () =>
+                  context.push('/child/$childId/zones', extra: widget.child),
             ),
           ),
         ],
@@ -415,11 +418,13 @@ class _InfoSheet extends ConsumerWidget {
   final bool locationLoading;
   final BusLive? bus;
   final int geofenceCount;
+  final VoidCallback onManageZones;
   const _InfoSheet({
     required this.location,
     required this.locationLoading,
     required this.bus,
     required this.geofenceCount,
+    required this.onManageZones,
   });
 
   @override
@@ -460,7 +465,10 @@ class _InfoSheet extends ConsumerWidget {
                   ],
                 ),
               ),
-              _SafeZonesChip(count: geofenceCount, label: t.t('map.safe_zones', 'Safe zones')),
+              _SafeZonesChip(
+                  count: geofenceCount,
+                  label: t.t('map.safe_zones', 'Safe zones'),
+                  onTap: onManageZones),
             ]),
             if (location == null && !locationLoading)
               Padding(
@@ -492,22 +500,33 @@ class _InfoSheet extends ConsumerWidget {
 class _SafeZonesChip extends StatelessWidget {
   final int count;
   final String label;
-  const _SafeZonesChip({required this.count, required this.label});
+  final VoidCallback onTap;
+  const _SafeZonesChip(
+      {required this.count, required this.label, required this.onTap});
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF2FB),
-        borderRadius: BorderRadius.circular(10),
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEFF2FB),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(children: [
+          Row(mainAxisSize: MainAxisSize.min, children: [
+            Text('$count',
+                style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    color: Brand.indigo,
+                    fontSize: 15)),
+            const Icon(Icons.chevron_right, size: 15, color: Brand.indigo),
+          ]),
+          Text(label,
+              style: const TextStyle(color: Brand.indigo, fontSize: 10.5)),
+        ]),
       ),
-      child: Column(children: [
-        Text('$count',
-            style: const TextStyle(
-                fontWeight: FontWeight.w800, color: Brand.indigo, fontSize: 15)),
-        Text(label,
-            style: const TextStyle(color: Brand.indigo, fontSize: 10.5)),
-      ]),
     );
   }
 }
