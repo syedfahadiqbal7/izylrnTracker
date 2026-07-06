@@ -6,7 +6,9 @@ import 'core/theme.dart';
 import 'features/auth/auth_controller.dart';
 import 'features/auth/otp_screen.dart';
 import 'features/auth/phone_screen.dart';
+import 'features/children/child.dart';
 import 'features/children/home_screen.dart';
+import 'features/tracking/live_map_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final refresh = ValueNotifier(0);
@@ -43,6 +45,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
+      GoRoute(
+        path: '/child/:id/map',
+        builder: (_, state) => LiveMapScreen(
+          childId: state.pathParameters['id']!,
+          child: state.extra is Child ? state.extra as Child : null,
+        ),
+      ),
     ],
   );
 });
