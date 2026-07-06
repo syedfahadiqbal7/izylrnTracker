@@ -70,6 +70,12 @@ Edit `.env` and set every `__CHANGE_ME__` value. Key points:
 - `TRACCAR_WEBHOOK_SECRET` must match the `X-Traccar-Secret` header in `traccar/traccar.xml`.
 - `ALLOWED_ORIGINS` — the panel is same-origin so it needs no entry; list only other
   browser origins that call the API directly.
+- `SHARE_LINK_BASE_URL` must be `https://<this-host>/track` — the public Share-Link tracking
+  page. nginx proxies `/track/` to the backend (already configured in `web-admin/nginx.conf`).
+
+The third-party integrations (Firebase, OTP, Maps, Payments, R2, SMTP) are all **graceful
+seams** — the stack runs without them. See **`CREDENTIALS.md`** for how to wire each one on,
+what it unlocks, and how to verify it.
 
 **Firebase credentials** — place the service-account JSON where the backend expects it:
 
@@ -238,6 +244,33 @@ docker compose -f docker-compose.prod.yml up -d
 - [ ] `ENVIRONMENT=production` (HSTS on, `/docs` hidden).
 - [ ] TLS terminated (option A or B); HTTP redirects to HTTPS.
 - [ ] `alembic upgrade head` run; first admin seeded; `SCHOOL_SEED_SECRET` removed.
+- [ ] `SHARE_LINK_BASE_URL=https://<host>/track`; `curl https://<host>/track/x` → 200 HTML.
+- [ ] Integrations wired per **`CREDENTIALS.md`** (at minimum: Traccar, Firebase, OTP).
 - [ ] Postgres backups scheduled; `backend/secrets/` + `.env` backed up.
 - [ ] Only `80/443` + GPS device ports exposed; Postgres/Redis internal only.
 - [ ] Exactly one backend with `RUN_BACKGROUND_LOOPS=true`.
+
+---
+
+## 15. Parent app (Flutter) — build & release
+
+The **parent app is a mobile client**, not part of the server Docker stack. Point it at the
+deployed API (`API_BASE_URL` / `Env.apiBaseUrl` → `https://<host>/api/v1`) and build per store:
+
+```bash
+cd flutter
+flutter build appbundle --release      # Android → Play Store (.aab)
+flutter build ipa --release            # iOS → App Store (needs a Mac + signing)
+# flutter build web --release          # optional PWA build (served separately)
+```
+
+Before a real release, wire the Firebase platform files (`google-services.json` /
+`GoogleService-Info.plist`) and enable `firebase_messaging` for push — see `CREDENTIALS.md` §2.
+
+---
+
+## 16. Go-live sequence
+
+1. Deploy the stack (this guide) and wire credentials — **`CREDENTIALS.md`**.
+2. Validate the whole pipeline with a real GPS watch — **`HARDWARE_VALIDATION.md`**.
+3. Build + submit the parent app (§15); create the first school admin (§7).
