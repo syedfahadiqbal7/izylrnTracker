@@ -50,15 +50,27 @@ async def test_send_otp_sms_fallback(client, fake_gateway, db_session):
     assert row.channel == "sms"
 
 
-async def test_send_otp_all_channels_fail(client, fake_gateway, db_session):
+async def test_send_otp_dev_fallback(client, fake_gateway, db_session):
+    # No provider configured (dev): the flow still succeeds so local dev/testing
+    # can complete. The OTP is logged (channel="dev") and persisted.
+    fake_gateway.whatsapp_ok = False
+    fake_gateway.sms_ok = False
+    resp = await client.post("/api/v1/auth/send-otp", json={"phone": PHONE_IN})
+    assert resp.status_code == 200
+    assert resp.json()["data"]["channel"] == "dev"
+    row = (await db_session.execute(select(OtpSession).where(OtpSession.phone == PHONE_IN))).scalar_one()
+    assert verify_secret(fake_gateway.last_otp, row.otp_hash) is True
+
+
+async def test_send_otp_all_channels_fail_in_production(client, fake_gateway, db_session, monkeypatch):
+    # In production there is NO dev fallback — a total delivery failure is a 502.
+    from app.core.config import settings
+    monkeypatch.setattr(settings, "environment", "production")
     fake_gateway.whatsapp_ok = False
     fake_gateway.sms_ok = False
     resp = await client.post("/api/v1/auth/send-otp", json={"phone": PHONE_IN})
     assert resp.status_code == 502
-    body = resp.json()
-    assert body["error"] is True
-    assert body["code"] == "OTP_SEND_FAILED"
-    # nothing persisted on failure
+    assert resp.json()["code"] == "OTP_SEND_FAILED"
     rows = (await db_session.execute(select(OtpSession).where(OtpSession.phone == PHONE_IN))).scalars().all()
     assert rows == []
 
