@@ -1,0 +1,139 @@
+# ============================================================================
+# IzySafe — PRODUCTION stack (Docker Compose)
+#
+#   1. cp .env.production.example .env   &&   fill real secrets
+#   2. docker compose -f docker-compose.prod.yml build
+#   3. docker compose -f docker-compose.prod.yml run --rm backend alembic upgrade head
+#   4. docker compose -f docker-compose.prod.yml up -d
+#
+# vs. the dev stack: images are self-contained (no source bind-mounts, no
+# --reload), data lives in named volumes, Postgres/Redis are NOT published to
+# the host, and the admin panel (nginx) is the single public web entrypoint,
+# reverse-proxying /api to the backend. See DEPLOY.md.
+# ============================================================================
+
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: izysafe-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-izysafe}
+      POSTGRES_USER: ${POSTGRES_USER:-izysafe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./backend/db/init:/docker-entrypoint-initdb.d:ro   # creates the `traccar` DB once
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-izysafe} -d ${POSTGRES_DB:-izysafe}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks: [izysafe]
+
+  redis:
+    image: redis:7-alpine
+    container_name: izysafe-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks: [izysafe]
+
+  traccar:
+    image: traccar/traccar:latest
+    container_name: izysafe-traccar
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      # GPS device ports must be reachable from the internet (watches dial in).
+      - "5023:5023"   # GT06 (primary)
+      - "5002:5002"   # TK103
+      - "5013:5013"   # H02
+      # 8082 (Traccar web/REST) stays internal — the backend reaches it at traccar:8082.
+    volumes:
+      - ./traccar/traccar.xml:/opt/traccar/conf/traccar.xml:ro
+      - traccar_logs:/opt/traccar/logs
+    networks: [izysafe]
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    image: izysafe-backend:prod
+    container_name: izysafe-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file: .env
+    environment:
+      ENVIRONMENT: production
+      RUN_BACKGROUND_LOOPS: "true"   # singleton loops — keep true on exactly ONE web instance
+    volumes:
+      - ./backend/secrets:/app/secrets:ro   # firebase-service-account.json (gitignored)
+    # Not published to the host — only the nginx `web` service talks to it.
+    networks: [izysafe]
+
+  celery-worker:
+    image: izysafe-backend:prod
+    container_name: izysafe-celery-worker
+    restart: unless-stopped
+    command: celery -A app.worker.celery_app worker --loglevel=info
+    env_file: .env
+    environment:
+      ENVIRONMENT: production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      backend:
+        condition: service_started
+    volumes:
+      - ./backend/secrets:/app/secrets:ro
+    networks: [izysafe]
+
+  celery-beat:
+    image: izysafe-backend:prod
+    container_name: izysafe-celery-beat
+    restart: unless-stopped
+    command: celery -A app.worker.celery_app beat --loglevel=info
+    env_file: .env
+    environment:
+      ENVIRONMENT: production
+    depends_on: [celery-worker]
+    volumes:
+      - ./backend/secrets:/app/secrets:ro
+    networks: [izysafe]
+
+  # Public web entrypoint: serves the admin panel + reverse-proxies /api → backend.
+  web:
+    build:
+      context: ./web-admin
+      dockerfile: Dockerfile
+    image: izysafe-web-admin:prod
+    container_name: izysafe-web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "80:80"
+      # - "443:443"   # enable when terminating TLS here (mount certs into nginx)
+    networks: [izysafe]
+
+volumes:
+  pg_data:
+  traccar_logs:
+
+networks:
+  izysafe:
+    driver: bridge

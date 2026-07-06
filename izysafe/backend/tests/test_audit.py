@@ -159,3 +159,25 @@ async def test_audit_pagination_and_filter(client, db_session):
     resp, _ = await _actions(client, _hdr(admin), action="school.config_update", limit=2)
     assert resp.json()["meta"]["total"] == 3
     assert len(resp.json()["data"]) == 2  # page size
+
+
+async def test_audit_export_csv(client, db_session):
+    school, admin, _, _ = await _school_admin(db_session)
+    for t in ("08:30:00", "08:31:00"):
+        await client.put("/api/v1/schools/me", headers=_hdr(admin), json={"on_time_before": t})
+    resp = await client.get("/api/v1/schools/audit/export", headers=_hdr(admin))
+    assert resp.status_code == 200, resp.text
+    assert resp.headers["content-type"].startswith("text/csv")
+    assert "attachment" in resp.headers["content-disposition"]
+    lines = resp.text.strip().splitlines()
+    assert lines[0].startswith("created_at,actor_type,actor_id,action")
+    assert any("school.config_update" in ln for ln in lines[1:])
+
+
+async def test_audit_export_requires_admin(client, db_session):
+    school, _, _, _ = await _school_admin(db_session)
+    staff = SchoolAdmin(school_id=school.id, email=f"s-{uuid.uuid4().hex[:6]}@s.test",
+                        password_hash=hash_secret("password123"), role="staff", active=True)
+    db_session.add(staff)
+    await db_session.flush()
+    assert (await client.get("/api/v1/schools/audit/export", headers=_hdr(staff))).status_code == 403

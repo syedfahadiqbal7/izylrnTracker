@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web-admin",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "izysafe/web-admin", "run", "dev"],
+      "port": 5173
+    },
+    {
+      "name": "flutter-parent",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "http.server", "3007", "--directory", "izysafe/flutter/build/web"],
+      "port": 3007
+    }
+  ]
+}

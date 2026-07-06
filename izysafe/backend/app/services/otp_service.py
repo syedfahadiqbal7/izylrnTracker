@@ -7,6 +7,7 @@ verify_otp + token issuance arrive in the next slice.
 """
 from __future__ import annotations
 
+import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
@@ -25,6 +26,8 @@ from app.core.security import (
 from app.core.validators import validate_phone
 from app.models.user import OtpSession, User
 from app.services.otp_gateway import OtpGateway
+
+logger = logging.getLogger("izysafe.otp")
 
 
 class OtpService:
@@ -46,7 +49,9 @@ class OtpService:
             OtpSession(
                 phone=phone,
                 otp_hash=hash_secret(otp),
-                channel=channel,
+                # OtpSession.channel is CHECK-constrained to whatsapp/sms; the "dev"
+                # fallback records "sms" but still reports "dev" to the caller.
+                channel="sms" if channel == "dev" else channel,
                 expires_at=expires_at,
             )
         )
@@ -157,6 +162,11 @@ class OtpService:
             return "whatsapp"
         if await self.gateway.send_sms(phone, otp):
             return "sms"
+        # Dev fallback: no OTP provider configured (MSG91/Twilio). Log the code so
+        # local dev + testing can complete the flow. NEVER happens in production.
+        if not settings.is_production:
+            logger.warning("DEV OTP for %s = %s (no provider configured)", phone, otp)
+            return "dev"
         raise APIException(
             502, "OTP_SEND_FAILED",
             "Could not send OTP — please verify your phone number is correct and try again",

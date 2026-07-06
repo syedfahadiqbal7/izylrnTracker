@@ -35,7 +35,55 @@ class DriverResponse(BaseModel):
     phone: str | None = None
     verified: bool
     active: bool
+    has_access_code: bool = False   # derived from password_hash; false ⇒ can't log in yet
+    last_login_at: datetime | None = None
     created_at: datetime
+
+
+# ------------------------------------------------------- live fleet (map view)
+class BusLivePosition(BaseModel):
+    lat: float
+    lng: float
+    timestamp: str | None = None
+
+
+class BusLiveStop(BaseModel):
+    id: uuid.UUID
+    name: str
+    lat: float
+    lng: float
+    seq: int
+
+
+class BusLiveRoute(BaseModel):
+    id: uuid.UUID
+    name: str
+    active: bool
+    students: int
+    stops: list[BusLiveStop]
+
+
+class BusLiveDriver(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class BusLiveTrip(BaseModel):
+    active: bool
+    started_at: datetime | None = None
+
+
+class FleetBusResponse(BaseModel):
+    bus_id: uuid.UUID
+    bus_name: str
+    imei: str | None = None
+    traccar_id: int | None = None
+    online: bool
+    last_seen: datetime | None = None
+    position: BusLivePosition | None = None
+    route: BusLiveRoute | None = None
+    driver: BusLiveDriver | None = None
+    trip: BusLiveTrip | None = None
 
 
 # ------------------------------------------------------------------- routes
@@ -97,6 +145,10 @@ class StopResponse(BaseModel):
     lng: float
     seq: int
     scheduled_at: time | None = None
+
+
+class StopReorderRequest(BaseModel):
+    stop_ids: list[uuid.UUID] = Field(..., min_length=1)  # full route order, 1..N
 
 
 # -------------------------------------------------------------- assignments

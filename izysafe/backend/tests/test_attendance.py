@@ -284,6 +284,27 @@ async def test_set_manual_override(client, db_session):
     assert data["status"] == "absent" and data["marked_manually"] is True
 
 
+async def test_daily_register_includes_enrollment_id(client, db_session):
+    school, _, child, _, hdr = await _setup(db_session)
+    eid = await _enrollment_id(db_session, child.id)
+    resp = await client.get(f"/api/v1/schools/attendance?date={DAY.isoformat()}", headers=hdr)
+    assert resp.json()["data"][0]["enrollment_id"] == eid
+
+
+async def test_set_manual_with_arrival_time_localized(client, db_session):
+    # 09:00 in Asia/Kolkata (+05:30) → 03:30 UTC stored.
+    school, _, child, _, hdr = await _setup(db_session, tz="Asia/Kolkata")
+    eid = await _enrollment_id(db_session, child.id)
+    resp = await client.put(
+        f"{STUDENTS}/{eid}/attendance", headers=hdr,
+        json={"date": DAY.isoformat(), "status": "on_time", "arrival_time": "09:00"},
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data["status"] == "on_time" and data["marked_manually"] is True
+    assert data["arrival_time"].startswith("2026-06-17T03:30:00")
+
+
 async def test_attendance_tenant_isolation(client, db_session):
     school_a, _, child_a, _, _ = await _setup(db_session)
     _, _, _, _, hdr_b = await _setup(db_session)  # different school + admin
@@ -413,3 +434,26 @@ async def test_export_invalid_range(client, db_session):
     resp = await client.get(f"{EXPORT}?from={DAY.isoformat()}&to={D1.isoformat()}", headers=hdr)
     assert resp.status_code == 422
     assert resp.json()["code"] == "INVALID_RANGE"
+
+
+# --------------------------------------------------------------------------- #
+# Dashboard stats
+# --------------------------------------------------------------------------- #
+async def test_dashboard_stats(client, db_session):
+    school, _, child, _, hdr = await _setup(db_session)  # 1 consented enrollment (tz=UTC)
+    other = Child(name="Bina")
+    db_session.add(other)
+    await db_session.flush()
+    db_session.add(StudentEnrollment(school_id=school.id, child_id=other.id, parent_opt_in=False))
+    today = datetime.now(timezone.utc).date()
+    db_session.add(AttendanceRecord(school_id=school.id, child_id=child.id, date=today, status="on_time"))
+    await db_session.flush()
+
+    resp = await client.get("/api/v1/schools/dashboard/stats", headers=hdr)
+    assert resp.status_code == 200, resp.text
+    d = resp.json()["data"]
+    assert d["students_enrolled"] == 2
+    assert d["consented"] == 1
+    assert d["pending_consents"] == 1
+    assert d["students_present"] == 1
+    assert d["buses_total"] == 0 and d["active_trips"] == 0

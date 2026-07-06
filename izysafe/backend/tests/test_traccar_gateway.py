@@ -14,15 +14,20 @@ from app.services.traccar_gateway import TraccarGateway
 
 
 class _FakeResp:
-    def __init__(self, status_code: int) -> None:
+    def __init__(self, status_code: int, json_body: dict | None = None) -> None:
         self.status_code = status_code
+        self._json = json_body if json_body is not None else {}
+
+    def json(self) -> dict:
+        return self._json
 
 
 class _FakeClient:
-    """Records the POST and returns a configured status; raises if `error` is set."""
+    """Records the request and returns a configured status; raises if `error` is set."""
 
     calls: list[dict] = []
     status_code = 200
+    json_body: dict | None = None
     error: Exception | None = None
 
     def __init__(self, *args, **kwargs) -> None:
@@ -37,14 +42,21 @@ class _FakeClient:
     async def post(self, url, **kwargs):
         if _FakeClient.error is not None:
             raise _FakeClient.error
-        _FakeClient.calls.append({"url": url, **kwargs})
-        return _FakeResp(_FakeClient.status_code)
+        _FakeClient.calls.append({"method": "POST", "url": url, **kwargs})
+        return _FakeResp(_FakeClient.status_code, _FakeClient.json_body)
+
+    async def delete(self, url, **kwargs):
+        if _FakeClient.error is not None:
+            raise _FakeClient.error
+        _FakeClient.calls.append({"method": "DELETE", "url": url, **kwargs})
+        return _FakeResp(_FakeClient.status_code, _FakeClient.json_body)
 
 
 @pytest.fixture(autouse=True)
 def _reset_and_configure(monkeypatch):
     _FakeClient.calls = []
     _FakeClient.status_code = 200
+    _FakeClient.json_body = None
     _FakeClient.error = None
     monkeypatch.setattr(tg.httpx, "AsyncClient", _FakeClient)
     monkeypatch.setattr(tg.settings, "traccar_api_user", "admin@izysafe.local")
@@ -105,3 +117,56 @@ async def test_unconfigured_returns_false_without_call(monkeypatch):
     ok = await TraccarGateway().send_command(7, "MONITOR,+91#")
     assert ok is False
     assert _FakeClient.calls == []  # short-circuited before any network call
+
+
+# --------------------------------------------------------- device registration
+async def test_create_device_success_shape():
+    _FakeClient.json_body = {"id": 42, "name": "Aryan's Watch", "uniqueId": "358900000000001"}
+    traccar_id = await TraccarGateway().create_device("358900000000001", "Aryan's Watch")
+    assert traccar_id == 42
+    call = _FakeClient.calls[0]
+    assert call["method"] == "POST"
+    assert call["url"] == "http://traccar:8082/api/devices"
+    assert call["auth"] == ("admin@izysafe.local", "secret")
+    assert call["json"] == {"name": "Aryan's Watch", "uniqueId": "358900000000001"}
+
+
+async def test_create_device_rejected_returns_none():
+    _FakeClient.status_code = 400  # e.g. duplicate uniqueId in Traccar
+    assert await TraccarGateway().create_device("358900000000001", "W") is None
+
+
+async def test_create_device_no_id_returns_none():
+    _FakeClient.json_body = {"name": "W"}  # unexpected body, no id
+    assert await TraccarGateway().create_device("358900000000001", "W") is None
+
+
+async def test_create_device_network_error_returns_none():
+    _FakeClient.error = httpx.ConnectError("boom")
+    assert await TraccarGateway().create_device("358900000000001", "W") is None
+
+
+async def test_create_device_unconfigured_returns_none(monkeypatch):
+    monkeypatch.setattr(tg.settings, "traccar_api_user", "")
+    monkeypatch.setattr(tg.settings, "traccar_api_password", "")
+    assert await TraccarGateway().create_device("358900000000001", "W") is None
+    assert _FakeClient.calls == []
+
+
+async def test_delete_device_success_shape():
+    ok = await TraccarGateway().delete_device(42)
+    assert ok is True
+    call = _FakeClient.calls[0]
+    assert call["method"] == "DELETE"
+    assert call["url"] == "http://traccar:8082/api/devices/42"
+    assert call["auth"] == ("admin@izysafe.local", "secret")
+
+
+async def test_delete_device_rejected_returns_false():
+    _FakeClient.status_code = 404
+    assert await TraccarGateway().delete_device(42) is False
+
+
+async def test_delete_device_network_error_returns_false():
+    _FakeClient.error = httpx.ConnectError("boom")
+    assert await TraccarGateway().delete_device(42) is False

@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+tests/
+.env
+.env.*
+*.md
+.venv/
+venv/
+celerybeat-schedule*

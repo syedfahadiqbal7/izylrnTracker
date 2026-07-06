@@ -9,11 +9,13 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends
+from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_school_admin
 from app.core.database import get_db
 from app.core.errors import success
+from app.core.redis import get_redis
 from app.models.child import Child
 from app.models.device import Device
 from app.models.school import BusAssignment, BusRoute, BusRouteStop, Driver, SchoolAdmin
@@ -22,6 +24,7 @@ from app.schemas.bus import (
     AssignmentResponse,
     BusDeviceCreate,
     BusDeviceResponse,
+    FleetBusResponse,
     DriverCreate,
     DriverResponse,
     DriverSetCodeRequest,
@@ -30,16 +33,24 @@ from app.schemas.bus import (
     RouteResponse,
     RouteUpdate,
     StopCreate,
+    StopReorderRequest,
     StopResponse,
     StopUpdate,
 )
+from app.schemas.school import ChildLiveResponse
 from app.services.bus_service import BusService
+from app.services.bus_tracking_service import BusLiveService
 
 router = APIRouter(prefix="/schools", tags=["bus"])
 
 
 def _driver(d: Driver) -> dict:
-    return DriverResponse.model_validate(d).model_dump(mode="json")
+    return DriverResponse(
+        id=d.id, school_id=d.school_id, name=d.name, phone=d.phone,
+        verified=d.verified, active=d.active,
+        has_access_code=d.password_hash is not None,
+        last_login_at=d.last_login_at, created_at=d.created_at,
+    ).model_dump(mode="json")
 
 
 def _route(r: BusRoute) -> dict:
@@ -77,6 +88,30 @@ async def list_buses(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     return success([_bus(b) for b in await BusService(db).list_buses(admin)])
+
+
+@router.get("/buses/live")
+async def live_buses(
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """Live fleet view for the map: every bus's cached position + online state,
+    with its route/driver/stops/roster-count and any active trip."""
+    fleet = await BusLiveService(db, redis).fleet(admin)
+    return success([FleetBusResponse(**b).model_dump(mode="json") for b in fleet])
+
+
+@router.get("/children/live")
+async def live_children(
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> dict:
+    """Consented children's live positions for the map (kid trackers). Requires
+    parent_opt_in + location_opt_in; position shown only within school hours."""
+    children = await BusLiveService(db, redis).children_fleet(admin)
+    return success([ChildLiveResponse(**c).model_dump(mode="json") for c in children])
 
 
 @router.delete("/buses/{device_id}")
@@ -206,6 +241,18 @@ async def list_stops(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     return success([_stop(s) for s in await BusService(db).list_stops(admin, route_id)])
+
+
+@router.put("/routes/{route_id}/stops/reorder")
+async def reorder_stops(
+    route_id: uuid.UUID,
+    payload: StopReorderRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Renumber a route's stops to the given order (atomic seq 1..N)."""
+    stops = await BusService(db).reorder_stops(admin, route_id, payload.stop_ids)
+    return success([_stop(s) for s in stops])
 
 
 @router.put("/stops/{stop_id}")

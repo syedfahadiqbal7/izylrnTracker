@@ -99,22 +99,30 @@ class SchoolResponse(BaseModel):
 
     id: uuid.UUID
     name: str
+    address: str | None = None
+    contact_phone: str | None = None
+    contact_email: str | None = None
     timezone: str
     holidays: list | None = None
     on_time_before: time
     late_until: time
     arrival_window_from: time
+    day_ends_at: time
     created_at: datetime
     updated_at: datetime
 
 
 class SchoolUpdateRequest(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=200)
+    address: str | None = Field(None, max_length=300)
+    contact_phone: str | None = Field(None, max_length=20)
+    contact_email: str | None = Field(None, max_length=255)
     timezone: str | None = Field(None, max_length=64)
     holidays: list[str] | None = None            # ["2026-08-15", ...] ISO dates
     on_time_before: time | None = None
     late_until: time | None = None
     arrival_window_from: time | None = None
+    day_ends_at: time | None = None
 
     @field_validator("holidays")
     @classmethod
@@ -146,9 +154,18 @@ class EnrollmentResponse(BaseModel):
     child_id: uuid.UUID
     child_name: str
     class_grade: str | None = None
+    parent_name: str | None = None       # primary parent (the enrolling contact)
+    parent_phone: str | None = None
     parent_opt_in: bool
     bus_opt_in: bool
+    location_opt_in: bool = False
     enrolled_at: datetime
+
+
+class EnrollmentUpdateRequest(BaseModel):
+    """School edits the fields it owns (currently the class/grade)."""
+
+    class_grade: str | None = Field(None, max_length=50)
 
 
 class ParentEnrollmentResponse(BaseModel):
@@ -162,12 +179,14 @@ class ParentEnrollmentResponse(BaseModel):
     class_grade: str | None = None
     parent_opt_in: bool
     bus_opt_in: bool
+    location_opt_in: bool = False
     enrolled_at: datetime
 
 
 class EnrollmentConsentRequest(BaseModel):
     parent_opt_in: bool | None = None            # approve (True) / withdraw (False)
     bus_opt_in: bool | None = None               # separate bus-tracking consent
+    location_opt_in: bool | None = None          # separate live-location consent (S10)
 
 
 # --------------------------------------------------------------------------- #
@@ -192,6 +211,7 @@ class AttendanceRecordResponse(BaseModel):
 
 
 class DailyRegisterRow(BaseModel):
+    enrollment_id: uuid.UUID
     child_id: uuid.UUID
     child_name: str
     class_grade: str | None = None
@@ -203,6 +223,9 @@ class DailyRegisterRow(BaseModel):
 class ManualAttendanceRequest(BaseModel):
     date: _date
     status: AttendanceStatus
+    # Optional local (school-timezone) arrival time-of-day to stamp alongside the
+    # status; the service localizes date+time to the school tz then stores UTC.
+    arrival_time: time | None = None
 
 
 class AttendanceReportSummary(BaseModel):
@@ -232,6 +255,38 @@ class AttendanceReportResponse(BaseModel):
     class_grade: str | None = None
     summary: AttendanceReportSummary
     per_student: list[StudentAttendanceSummary]
+
+
+# --------------------------------------------------------------------------- #
+# Live child tracking (Sprint 10 — kid trackers)
+# --------------------------------------------------------------------------- #
+class ChildLivePosition(BaseModel):
+    lat: float
+    lng: float
+    timestamp: str | None = None
+
+
+class ChildLiveResponse(BaseModel):
+    child_id: uuid.UUID
+    child_name: str
+    class_grade: str | None = None
+    device_name: str | None = None
+    online: bool
+    last_seen: datetime | None = None
+    battery: int | None = None
+    in_window: bool                       # within school hours/days (live location shown)
+    position: ChildLivePosition | None = None
+
+
+class DashboardStatsResponse(BaseModel):
+    buses_total: int
+    buses_online: int
+    students_enrolled: int
+    consented: int
+    pending_consents: int
+    location_consented: int
+    students_present: int
+    active_trips: int
 
 
 # --------------------------------------------------------------------------- #

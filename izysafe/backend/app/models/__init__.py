@@ -14,7 +14,7 @@ from app.models.sos import SosEvent, EmergencyContact
 from app.models.alert import Alert
 from app.models.comms import AudioSession, CallRecord, ChatMessage
 from app.models.teen import Trip, CrashEvent
-from app.models.integration import IzyLrnLink, WearableIntegration, Translation
+from app.models.integration import IzyLrnLink, WearableIntegration, Translation, MenuItem
 from app.models.school import (
     School,
     SchoolAdmin,
@@ -40,7 +40,7 @@ __all__ = [
     "Alert",
     "AudioSession", "CallRecord", "ChatMessage",
     "Trip", "CrashEvent",
-    "IzyLrnLink", "WearableIntegration", "Translation",
+    "IzyLrnLink", "WearableIntegration", "Translation", "MenuItem",
     "School", "SchoolAdmin", "StudentEnrollment", "AttendanceRecord",
     "Driver", "BusRoute", "BusRouteStop", "BusAssignment", "BusTrip", "BusBoarding",
     "AuditLog",

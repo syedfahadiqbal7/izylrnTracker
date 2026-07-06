@@ -30,6 +30,63 @@ logger = logging.getLogger("izysafe.traccar")
 class TraccarGateway:
     """Default production gateway. Construct once per request (cheap)."""
 
+    async def create_device(self, imei: str, name: str) -> int | None:
+        """Register a device in Traccar so its incoming GPS fixes can be resolved to us
+        (device pairing, Sprint 11). ``uniqueId`` is the IMEI — the id the tracker reports
+        on the wire, which Traccar matches positions against. Returns Traccar's numeric
+        device id (stored in ``devices.traccar_id``) on success, else ``None``.
+
+        Never raises: an unconfigured Traccar, a duplicate/rejected registration, or a
+        network error all yield ``None`` so pairing still succeeds locally (the device is
+        registered in Traccar later / by hand — a documented graceful seam)."""
+        if not (settings.traccar_api_user and settings.traccar_api_password):
+            logger.warning("Traccar API not configured — cannot register device %s", imei)
+            return None
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.post(
+                    f"{settings.traccar_url}/api/devices",
+                    auth=(settings.traccar_api_user, settings.traccar_api_password),
+                    json={"name": name, "uniqueId": imei},
+                )
+        except httpx.HTTPError:
+            logger.exception("Traccar device registration failed for IMEI %s", imei)
+            return None
+        if resp.status_code >= 300:
+            logger.warning(
+                "Traccar rejected device registration for IMEI %s (HTTP %s)",
+                imei, resp.status_code,
+            )
+            return None
+        try:
+            return int(resp.json()["id"])
+        except (ValueError, TypeError, KeyError, AttributeError):
+            logger.warning("Traccar registration for IMEI %s returned no usable id", imei)
+            return None
+
+    async def delete_device(self, traccar_id: int) -> bool:
+        """Remove a device from Traccar (on unpair/delete). Returns True iff Traccar
+        accepts it (HTTP < 300). Never raises — a failed cleanup is logged, not fatal;
+        the local soft-delete is what actually stops the device being resolved."""
+        if not (settings.traccar_api_user and settings.traccar_api_password):
+            logger.warning("Traccar API not configured — cannot delete device %s", traccar_id)
+            return False
+        try:
+            async with httpx.AsyncClient(timeout=10) as client:
+                resp = await client.delete(
+                    f"{settings.traccar_url}/api/devices/{traccar_id}",
+                    auth=(settings.traccar_api_user, settings.traccar_api_password),
+                )
+        except httpx.HTTPError:
+            logger.exception("Traccar device deletion failed for device %s", traccar_id)
+            return False
+        if resp.status_code >= 300:
+            logger.warning(
+                "Traccar rejected device deletion for %s (HTTP %s)", traccar_id, resp.status_code
+            )
+            return False
+        return True
+
     async def send_command(
         self, traccar_id: int, data: str, description: str = "IzySafe command"
     ) -> bool:
