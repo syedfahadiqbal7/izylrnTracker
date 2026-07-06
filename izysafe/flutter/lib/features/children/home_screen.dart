@@ -43,9 +43,9 @@ class HomeScreen extends ConsumerWidget {
           const _AlertsBell(),
           const LanguageButton(),
           IconButton(
-            tooltip: t.t('app.sign_out', 'Sign out'),
-            icon: const Icon(Icons.logout, size: 20),
-            onPressed: () => ref.read(authControllerProvider.notifier).logout(),
+            tooltip: t.t('nav.settings', 'Settings'),
+            icon: const Icon(Icons.settings_outlined, size: 22),
+            onPressed: () => context.push('/settings'),
           ),
           const SizedBox(width: 8),
         ],
