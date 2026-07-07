@@ -346,6 +346,12 @@ class _TopBar extends ConsumerWidget {
                 onPressed: () =>
                     context.push('/child/$childId/share', extra: child),
               ),
+              IconButton(
+                tooltip: t.t('chat.title', 'Chat'),
+                icon: const Icon(Icons.chat_bubble_outline_rounded),
+                onPressed: () =>
+                    context.push('/child/$childId/chat', extra: child),
+              ),
               const LanguageButton(),
             ],
           ),

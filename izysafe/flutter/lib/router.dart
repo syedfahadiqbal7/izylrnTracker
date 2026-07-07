@@ -7,6 +7,7 @@ import 'features/auth/auth_controller.dart';
 import 'features/auth/otp_screen.dart';
 import 'features/auth/phone_screen.dart';
 import 'features/alerts/alerts_screen.dart';
+import 'features/chat/chat_screen.dart';
 import 'features/children/child.dart';
 import 'features/children/home_screen.dart';
 import 'features/devices/devices_screen.dart';
@@ -76,6 +77,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/child/:id/share',
         builder: (_, state) => ShareLinksScreen(
+          childId: state.pathParameters['id']!,
+          childName: state.extra is Child ? (state.extra as Child).name : null,
+        ),
+      ),
+      GoRoute(
+        path: '/child/:id/chat',
+        builder: (_, state) => ChatScreen(
           childId: state.pathParameters['id']!,
           childName: state.extra is Child ? (state.extra as Child).name : null,
         ),
