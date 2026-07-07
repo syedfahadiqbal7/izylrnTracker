@@ -83,11 +83,11 @@ export function RoutesPage() {
         <TabsList>
           <TabsTrigger value="routes">
             <RouteIcon className="size-4" />
-            Routes
+            {t("routes.tab_routes", "Routes")}
           </TabsTrigger>
           <TabsTrigger value="buses">
             <Bus className="size-4" />
-            Buses
+            {t("routes.tab_buses", "Buses")}
           </TabsTrigger>
         </TabsList>
         <TabsContent value="routes">
@@ -105,6 +105,7 @@ export function RoutesPage() {
 // Routes tab (master-detail)
 // --------------------------------------------------------------------------- //
 function RoutesTab() {
+  const t = useT();
   const routes = useRoutes();
   const buses = useBuses();
   const drivers = useDrivers();
@@ -132,11 +133,11 @@ function RoutesTab() {
       <Card className="flex h-fit flex-col">
         <CardHeader className="flex-row items-center justify-between border-b py-3">
           <CardTitle className="text-sm text-muted-foreground">
-            Routes ({list.length})
+            {t("routes.routes_count", "Routes")} ({list.length})
           </CardTitle>
           <Button size="sm" onClick={() => setRouteDialog({ route: null })}>
             <Plus className="size-4" />
-            New
+            {t("routes.new", "New")}
           </Button>
         </CardHeader>
         <div className="space-y-2 p-3">
@@ -146,7 +147,7 @@ function RoutesTab() {
             ))}
           {routes.isSuccess && list.length === 0 && (
             <p className="py-8 text-center text-sm text-muted-foreground">
-              No routes yet. Create your first route.
+              {t("routes.empty", "No routes yet. Create your first route.")}
             </p>
           )}
           {list.map((r) => (
@@ -162,11 +163,11 @@ function RoutesTab() {
             >
               <div className="flex items-center justify-between">
                 <span className="font-medium">{r.name}</span>
-                {!r.active && <Badge variant="muted">Inactive</Badge>}
+                {!r.active && <Badge variant="muted">{t("common.inactive", "Inactive")}</Badge>}
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                {busName(r.device_id) ?? "No bus"} ·{" "}
-                {driverName(r.driver_id) ?? "No driver"}
+                {busName(r.device_id) ?? t("routes.no_bus", "No bus")} ·{" "}
+                {driverName(r.driver_id) ?? t("routes.no_driver", "No driver")}
               </p>
             </button>
           ))}
@@ -184,7 +185,7 @@ function RoutesTab() {
       ) : (
         <Card>
           <CardContent className="py-16 text-center text-sm text-muted-foreground">
-            Select or create a route to manage its stops and students.
+            {t("routes.select_prompt", "Select or create a route to manage its stops and students.")}
           </CardContent>
         </Card>
       )}
@@ -213,6 +214,7 @@ function RouteDetail({
   driverName: string | null;
   onEdit: () => void;
 }) {
+  const t = useT();
   const del = useDeleteRoute();
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -223,16 +225,16 @@ function RouteDetail({
           <div>
             <CardTitle className="flex items-center gap-2">
               {route.name}
-              {!route.active && <Badge variant="muted">Inactive</Badge>}
+              {!route.active && <Badge variant="muted">{t("common.inactive", "Inactive")}</Badge>}
             </CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
-              Bus: {busName ?? "—"} · Driver: {driverName ?? "—"}
+              {t("routes.bus_label", "Bus")}: {busName ?? "—"} · {t("routes.driver_label", "Driver")}: {driverName ?? "—"}
             </p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={onEdit}>
               <Pencil className="size-4" />
-              Edit
+              {t("common.edit", "Edit")}
             </Button>
             <Button
               variant="outline"
@@ -240,7 +242,7 @@ function RouteDetail({
               onClick={() => setConfirmDelete(true)}
             >
               <Trash2 className="size-4" />
-              Delete
+              {t("common.delete", "Delete")}
             </Button>
           </div>
         </CardHeader>
@@ -252,9 +254,9 @@ function RouteDetail({
       <ConfirmDialog
         open={confirmDelete}
         onOpenChange={setConfirmDelete}
-        title="Delete route"
-        description={`Delete "${route.name}"? Its stops and student assignments will be removed.`}
-        confirmLabel="Delete"
+        title={t("routes.delete_route", "Delete route")}
+        description={`${t("routes.delete_route_prefix", "Delete")} "${route.name}"${t("routes.delete_route_suffix", "? Its stops and student assignments will be removed.")}`}
+        confirmLabel={t("common.delete", "Delete")}
         destructive
         onConfirm={() => del.mutateAsync(route.id).then(() => undefined)}
       />
@@ -266,6 +268,7 @@ function RouteDetail({
 // Stops
 // --------------------------------------------------------------------------- //
 function StopsPanel({ route }: { route: Route }) {
+  const t = useT();
   const stops = useStops(route.id);
   const reorder = useReorderStops();
   const del = useDeleteStop();
@@ -290,10 +293,10 @@ function StopsPanel({ route }: { route: Route }) {
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between pb-3">
-        <CardTitle className="text-base">Stops ({rows.length})</CardTitle>
+        <CardTitle className="text-base">{t("routes.stops", "Stops")} ({rows.length})</CardTitle>
         <Button size="sm" onClick={() => setStopDialog({ stop: null })}>
           <Plus className="size-4" />
-          Add stop
+          {t("routes.add_stop", "Add stop")}
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -304,12 +307,12 @@ function StopsPanel({ route }: { route: Route }) {
           />
         </div>
         <p className="text-xs text-muted-foreground">
-          Tip: click anywhere on the map to drop a new stop there.
+          {t("routes.map_tip", "Tip: click anywhere on the map to drop a new stop there.")}
         </p>
 
         {rows.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground">
-            No stops yet. Add stops in boarding order.
+            {t("routes.no_stops", "No stops yet. Add stops in boarding order.")}
           </p>
         ) : (
           <div className="divide-y rounded-lg border">
@@ -379,9 +382,9 @@ function StopsPanel({ route }: { route: Route }) {
       <ConfirmDialog
         open={deleteStop !== null}
         onOpenChange={(o) => !o && setDeleteStop(null)}
-        title="Delete stop"
-        description={`Remove stop "${deleteStop?.name}"?`}
-        confirmLabel="Delete"
+        title={t("routes.delete_stop", "Delete stop")}
+        description={`${t("routes.remove_stop_prefix", "Remove stop")} "${deleteStop?.name}"?`}
+        confirmLabel={t("common.delete", "Delete")}
         destructive
         onConfirm={() =>
           del.mutateAsync(deleteStop!.id).then(() => setDeleteStop(null))
@@ -406,6 +409,7 @@ function StopDialog({
   nextSeq: number;
   onClose: () => void;
 }) {
+  const t = useT();
   const add = useAddStop();
   const update = useUpdateStop();
   const editing = stop !== null;
@@ -423,7 +427,7 @@ function StopDialog({
     const latN = Number(lat);
     const lngN = Number(lng);
     if (Number.isNaN(latN) || Number.isNaN(lngN)) {
-      setError("Enter valid coordinates.");
+      setError(t("routes.invalid_coords", "Enter valid coordinates."));
       return;
     }
     try {
@@ -441,7 +445,7 @@ function StopDialog({
       onClose();
     } catch (err) {
       setError(
-        err instanceof ApiClientError ? err.message : "Could not save the stop.",
+        err instanceof ApiClientError ? err.message : t("routes.save_stop_failed", "Could not save the stop."),
       );
     }
   };
@@ -451,28 +455,28 @@ function StopDialog({
       <DialogContent>
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit stop" : "Add stop"}</DialogTitle>
+            <DialogTitle>{editing ? t("routes.edit_stop", "Edit stop") : t("routes.add_stop", "Add stop")}</DialogTitle>
             <DialogDescription>
               {editing
-                ? "Update this stop's name or location."
-                : "New stops are added to the end of the route; reorder them afterwards."}
+                ? t("routes.edit_stop_desc", "Update this stop's name or location.")
+                : t("routes.add_stop_desc", "New stops are added to the end of the route; reorder them afterwards.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="st-name">Name</Label>
+              <Label htmlFor="st-name">{t("common.name", "Name")}</Label>
               <Input
                 id="st-name"
                 required
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Main Gate"
+                placeholder={t("routes.stop_name_placeholder", "e.g. Main Gate")}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor="st-lat">Latitude</Label>
+                <Label htmlFor="st-lat">{t("routes.latitude", "Latitude")}</Label>
                 <Input
                   id="st-lat"
                   required
@@ -482,7 +486,7 @@ function StopDialog({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="st-lng">Longitude</Label>
+                <Label htmlFor="st-lng">{t("routes.longitude", "Longitude")}</Label>
                 <Input
                   id="st-lng"
                   required
@@ -498,11 +502,11 @@ function StopDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button type="submit" disabled={pending || !name.trim()}>
               {pending && <Loader2 className="size-4 animate-spin" />}
-              {editing ? "Save" : "Add stop"}
+              {editing ? t("common.save", "Save") : t("routes.add_stop", "Add stop")}
             </Button>
           </DialogFooter>
         </form>
@@ -515,6 +519,7 @@ function StopDialog({
 // Assignments
 // --------------------------------------------------------------------------- //
 function AssignmentsPanel({ route }: { route: Route }) {
+  const t = useT();
   const assignments = useAssignments(route.id);
   const stops = useStops(route.id);
   const unassign = useUnassign();
@@ -524,33 +529,34 @@ function AssignmentsPanel({ route }: { route: Route }) {
   const rows = assignments.data ?? [];
   const stopName = useMemo(() => {
     const m: Record<string, string> = {};
-    for (const s of stops.data ?? []) m[s.id] = `Stop ${s.seq} · ${s.name}`;
+    for (const s of stops.data ?? [])
+      m[s.id] = `${t("routes.stop_prefix", "Stop")} ${s.seq} · ${s.name}`;
     return m;
-  }, [stops.data]);
+  }, [stops.data, t]);
 
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between pb-3">
         <CardTitle className="text-base">
-          Assigned students ({rows.length})
+          {t("routes.assigned_students", "Assigned students")} ({rows.length})
         </CardTitle>
         <Button size="sm" onClick={() => setAssignOpen(true)}>
           <UserPlus className="size-4" />
-          Assign student
+          {t("routes.assign_student", "Assign student")}
         </Button>
       </CardHeader>
       <CardContent>
         {rows.length === 0 ? (
           <p className="py-4 text-center text-sm text-muted-foreground">
-            No students assigned. Only consented students can be assigned.
+            {t("routes.no_students_assigned", "No students assigned. Only consented students can be assigned.")}
           </p>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Student</TableHead>
-                <TableHead>Boarding stop</TableHead>
-                <TableHead className="text-right">Action</TableHead>
+                <TableHead>{t("common.student", "Student")}</TableHead>
+                <TableHead>{t("routes.boarding_stop", "Boarding stop")}</TableHead>
+                <TableHead className="text-right">{t("common.action", "Action")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -567,7 +573,7 @@ function AssignmentsPanel({ route }: { route: Route }) {
                       className="text-destructive"
                       onClick={() => setRemoveFor(a.id)}
                     >
-                      Remove
+                      {t("routes.remove", "Remove")}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -588,9 +594,9 @@ function AssignmentsPanel({ route }: { route: Route }) {
       <ConfirmDialog
         open={removeFor !== null}
         onOpenChange={(o) => !o && setRemoveFor(null)}
-        title="Remove student"
-        description="Remove this student from the route?"
-        confirmLabel="Remove"
+        title={t("routes.remove_student", "Remove student")}
+        description={t("routes.remove_student_desc", "Remove this student from the route?")}
+        confirmLabel={t("routes.remove", "Remove")}
         destructive
         onConfirm={() =>
           unassign.mutateAsync(removeFor!).then(() => setRemoveFor(null))
@@ -611,6 +617,7 @@ function AssignDialog({
   assigned: string[];
   onClose: () => void;
 }) {
+  const t = useT();
   const roster = useRoster({ opted_in: true, limit: 200, offset: 0 });
   const assign = useAssignStudent();
   const [enrollmentId, setEnrollmentId] = useState("");
@@ -633,7 +640,7 @@ function AssignDialog({
       onClose();
     } catch (err) {
       setError(
-        err instanceof ApiClientError ? err.message : "Could not assign the student.",
+        err instanceof ApiClientError ? err.message : t("routes.assign_failed", "Could not assign the student."),
       );
     }
   };
@@ -643,19 +650,21 @@ function AssignDialog({
       <DialogContent>
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>Assign student</DialogTitle>
+            <DialogTitle>{t("routes.assign_student", "Assign student")}</DialogTitle>
             <DialogDescription>
-              Assign a consented student to {route.name} and their boarding stop.
+              {t("routes.assign_desc_prefix", "Assign a consented student to")} {route.name} {t("routes.assign_desc_suffix", "and their boarding stop.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Student</Label>
+              <Label>{t("common.student", "Student")}</Label>
               <Select value={enrollmentId} onValueChange={setEnrollmentId}>
                 <SelectTrigger>
                   <SelectValue
                     placeholder={
-                      eligible.length ? "Select a student" : "No eligible students"
+                      eligible.length
+                        ? t("routes.select_student", "Select a student")
+                        : t("routes.no_eligible_students", "No eligible students")
                     }
                   />
                 </SelectTrigger>
@@ -670,21 +679,21 @@ function AssignDialog({
               </Select>
               {roster.isSuccess && eligible.length === 0 && (
                 <p className="text-xs text-muted-foreground">
-                  All consented students are already assigned, or none exist yet.
+                  {t("routes.all_assigned", "All consented students are already assigned, or none exist yet.")}
                 </p>
               )}
             </div>
             <div className="space-y-2">
-              <Label>Boarding stop (optional)</Label>
+              <Label>{t("routes.boarding_stop_optional", "Boarding stop (optional)")}</Label>
               <Select value={stopId} onValueChange={setStopId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="No specific stop" />
+                  <SelectValue placeholder={t("routes.no_specific_stop", "No specific stop")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE}>No specific stop</SelectItem>
+                  <SelectItem value={NONE}>{t("routes.no_specific_stop", "No specific stop")}</SelectItem>
                   {stops.map((s) => (
                     <SelectItem key={s.id} value={s.id}>
-                      Stop {s.seq} · {s.name}
+                      {t("routes.stop_prefix", "Stop")} {s.seq} · {s.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -696,11 +705,11 @@ function AssignDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={assign.isPending}>
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button type="submit" disabled={assign.isPending || !enrollmentId}>
               {assign.isPending && <Loader2 className="size-4 animate-spin" />}
-              Assign
+              {t("routes.assign", "Assign")}
             </Button>
           </DialogFooter>
         </form>
@@ -725,6 +734,7 @@ function RouteDialog({
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
+  const t = useT();
   const create = useCreateRoute();
   const update = useUpdateRoute();
   const editing = route !== null;
@@ -753,7 +763,7 @@ function RouteDialog({
       onClose();
     } catch (err) {
       setError(
-        err instanceof ApiClientError ? err.message : "Could not save the route.",
+        err instanceof ApiClientError ? err.message : t("routes.save_route_failed", "Could not save the route."),
       );
     }
   };
@@ -763,31 +773,31 @@ function RouteDialog({
       <DialogContent>
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit route" : "New route"}</DialogTitle>
+            <DialogTitle>{editing ? t("routes.edit_route", "Edit route") : t("routes.new_route", "New route")}</DialogTitle>
             <DialogDescription>
-              A route links a bus and driver, with an ordered set of stops.
+              {t("routes.route_dialog_desc", "A route links a bus and driver, with an ordered set of stops.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="rt-name">Name</Label>
+              <Label htmlFor="rt-name">{t("common.name", "Name")}</Label>
               <Input
                 id="rt-name"
                 required
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Route A — North"
+                placeholder={t("routes.route_name_placeholder", "e.g. Route A — North")}
               />
             </div>
             <div className="space-y-2">
-              <Label>Bus</Label>
+              <Label>{t("routes.bus_label", "Bus")}</Label>
               <Select value={device} onValueChange={setDevice}>
                 <SelectTrigger>
-                  <SelectValue placeholder="No bus" />
+                  <SelectValue placeholder={t("routes.no_bus", "No bus")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE}>No bus</SelectItem>
+                  <SelectItem value={NONE}>{t("routes.no_bus", "No bus")}</SelectItem>
                   {buses.map((b) => (
                     <SelectItem key={b.id} value={b.id}>
                       {b.name}
@@ -797,13 +807,13 @@ function RouteDialog({
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Driver</Label>
+              <Label>{t("routes.driver_label", "Driver")}</Label>
               <Select value={driver} onValueChange={setDriver}>
                 <SelectTrigger>
-                  <SelectValue placeholder="No driver" />
+                  <SelectValue placeholder={t("routes.no_driver", "No driver")} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={NONE}>No driver</SelectItem>
+                  <SelectItem value={NONE}>{t("routes.no_driver", "No driver")}</SelectItem>
                   {drivers.map((d) => (
                     <SelectItem key={d.id} value={d.id}>
                       {d.name}
@@ -820,7 +830,7 @@ function RouteDialog({
                   onChange={(e) => setActive(e.target.checked)}
                   className="size-4 accent-primary"
                 />
-                Route is active
+                {t("routes.route_is_active", "Route is active")}
               </label>
             )}
             {error && (
@@ -829,11 +839,11 @@ function RouteDialog({
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button type="submit" disabled={pending || !name.trim()}>
               {pending && <Loader2 className="size-4 animate-spin" />}
-              {editing ? "Save" : "Create route"}
+              {editing ? t("common.save", "Save") : t("routes.create_route", "Create route")}
             </Button>
           </DialogFooter>
         </form>
@@ -846,6 +856,7 @@ function RouteDialog({
 // Buses tab
 // --------------------------------------------------------------------------- //
 function BusesTab() {
+  const t = useT();
   const buses = useBuses();
   const del = useDeleteBus();
   const [addOpen, setAddOpen] = useState(false);
@@ -856,10 +867,10 @@ function BusesTab() {
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between pb-3">
-        <CardTitle className="text-base">Bus devices ({rows.length})</CardTitle>
+        <CardTitle className="text-base">{t("routes.bus_devices", "Bus devices")} ({rows.length})</CardTitle>
         <Button size="sm" onClick={() => setAddOpen(true)}>
           <Plus className="size-4" />
-          Register bus
+          {t("routes.register_bus", "Register bus")}
         </Button>
       </CardHeader>
       <CardContent>
@@ -873,17 +884,17 @@ function BusesTab() {
           <div className="flex flex-col items-center gap-3 py-12 text-center">
             <Bus className="size-9 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              No bus devices yet. Register a GPS tracker to start tracking.
+              {t("routes.no_buses", "No bus devices yet. Register a GPS tracker to start tracking.")}
             </p>
           </div>
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
+                <TableHead>{t("common.name", "Name")}</TableHead>
                 <TableHead>IMEI</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Action</TableHead>
+                <TableHead>{t("common.status", "Status")}</TableHead>
+                <TableHead className="text-right">{t("common.action", "Action")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -900,7 +911,7 @@ function BusesTab() {
                   </TableCell>
                   <TableCell>
                     <Badge variant={b.is_online ? "success" : "muted"}>
-                      {b.is_online ? "Online" : "Offline"}
+                      {b.is_online ? t("common.online", "Online") : t("common.offline", "Offline")}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
@@ -911,7 +922,7 @@ function BusesTab() {
                       onClick={() => setRemoveFor(b)}
                     >
                       <Trash2 className="size-4" />
-                      Delete
+                      {t("common.delete", "Delete")}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -925,15 +936,15 @@ function BusesTab() {
       <ConfirmDialog
         open={removeFor !== null}
         onOpenChange={(o) => !o && setRemoveFor(null)}
-        title="Delete bus"
+        title={t("routes.delete_bus", "Delete bus")}
         description={
           <>
-            Delete <span className="font-medium">{removeFor?.name}</span>? Any
-            route using it will keep working without a bus until you assign a new
-            one.
+            {t("routes.delete_bus_prefix", "Delete")}{" "}
+            <span className="font-medium">{removeFor?.name}</span>
+            {t("routes.delete_bus_suffix", "? Any route using it will keep working without a bus until you assign a new one.")}
           </>
         }
-        confirmLabel="Delete"
+        confirmLabel={t("common.delete", "Delete")}
         destructive
         onConfirm={() =>
           del.mutateAsync(removeFor!.id).then(() => setRemoveFor(null))
@@ -944,6 +955,7 @@ function BusesTab() {
 }
 
 function BusDialog({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const register = useRegisterBus();
   const [name, setName] = useState("");
   const [imei, setImei] = useState("");
@@ -962,7 +974,7 @@ function BusDialog({ onClose }: { onClose: () => void }) {
       onClose();
     } catch (err) {
       setError(
-        err instanceof ApiClientError ? err.message : "Could not register the bus.",
+        err instanceof ApiClientError ? err.message : t("routes.register_bus_failed", "Could not register the bus."),
       );
     }
   };
@@ -972,21 +984,21 @@ function BusDialog({ onClose }: { onClose: () => void }) {
       <DialogContent>
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>Register bus</DialogTitle>
+            <DialogTitle>{t("routes.register_bus", "Register bus")}</DialogTitle>
             <DialogDescription>
-              Register a bus GPS tracker so its live position appears on the map.
+              {t("routes.register_bus_desc", "Register a bus GPS tracker so its live position appears on the map.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="bus-name">Name</Label>
+              <Label htmlFor="bus-name">{t("common.name", "Name")}</Label>
               <Input
                 id="bus-name"
                 required
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Bus 12"
+                placeholder={t("routes.bus_name_placeholder", "e.g. Bus 12")}
               />
             </div>
             <div className="space-y-2">
@@ -996,21 +1008,21 @@ function BusDialog({ onClose }: { onClose: () => void }) {
                 required
                 value={imei}
                 onChange={(e) => setImei(e.target.value)}
-                placeholder="GPS tracker IMEI"
+                placeholder={t("routes.imei_placeholder", "GPS tracker IMEI")}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="bus-traccar">
-                Traccar ID{" "}
+                {t("routes.traccar_id", "Traccar ID")}{" "}
                 <span className="font-normal text-muted-foreground">
-                  (optional)
+                  {t("routes.optional", "(optional)")}
                 </span>
               </Label>
               <Input
                 id="bus-traccar"
                 value={traccarId}
                 onChange={(e) => setTraccarId(e.target.value)}
-                placeholder="Numeric device id in Traccar"
+                placeholder={t("routes.traccar_placeholder", "Numeric device id in Traccar")}
               />
             </div>
             {error && (
@@ -1019,11 +1031,11 @@ function BusDialog({ onClose }: { onClose: () => void }) {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={register.isPending}>
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button type="submit" disabled={register.isPending || !name.trim() || !imei.trim()}>
               {register.isPending && <Loader2 className="size-4 animate-spin" />}
-              Register
+              {t("routes.register", "Register")}
             </Button>
           </DialogFooter>
         </form>

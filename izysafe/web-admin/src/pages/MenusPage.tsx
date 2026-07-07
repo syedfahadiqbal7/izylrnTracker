@@ -66,7 +66,7 @@ export function MenusPage() {
         <PageHeader title={t("menus.title", "Menu Management")} />
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            Only administrators can manage navigation.
+            {t("menus.admin_only", "Only administrators can manage navigation.")}
           </CardContent>
         </Card>
       </>
@@ -124,7 +124,7 @@ function MenusManager() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[90px]">Order</TableHead>
+                  <TableHead className="w-[90px]">{t("menus.order", "Order")}</TableHead>
                   <TableHead>{t("menus.label", "Label")}</TableHead>
                   <TableHead>{t("menus.path", "Path")}</TableHead>
                   <TableHead>{t("menus.roles", "Roles")}</TableHead>
@@ -174,7 +174,7 @@ function MenusManager() {
                       <TableCell>
                         <div className="flex gap-1">
                           {item.roles.length === 0 ? (
-                            <Badge variant="secondary">everyone</Badge>
+                            <Badge variant="secondary">{t("menus.everyone", "everyone")}</Badge>
                           ) : (
                             item.roles.map((r) => (
                               <Badge key={r} variant={r === "admin" ? "default" : "muted"}>
@@ -234,14 +234,15 @@ function MenusManager() {
       <ConfirmDialog
         open={deleteItem !== null}
         onOpenChange={(o) => !o && setDeleteItem(null)}
-        title="Delete menu item"
+        title={t("menus.delete_title", "Delete menu item")}
         description={
           <>
-            Remove <span className="font-mono">{deleteItem?.item_key}</span> from the
-            navigation?
+            {t("menus.delete_prefix", "Remove")}{" "}
+            <span className="font-mono">{deleteItem?.item_key}</span>{" "}
+            {t("menus.delete_suffix", "from the navigation?")}
           </>
         }
-        confirmLabel="Delete"
+        confirmLabel={t("common.delete", "Delete")}
         destructive
         onConfirm={() => del.mutateAsync(deleteItem!.id).then(() => setDeleteItem(null))}
       />
@@ -253,6 +254,7 @@ function MenusManager() {
 // Add / edit dialog
 // --------------------------------------------------------------------------- //
 function MenuItemDialog({ item, onClose }: { item?: MenuItemRow; onClose: () => void }) {
+  const t = useT();
   const create = useCreateMenuItem();
   const update = useUpdateMenuItem();
   const isEdit = Boolean(item);
@@ -276,7 +278,7 @@ function MenuItemDialog({ item, onClose }: { item?: MenuItemRow; onClose: () => 
     e.preventDefault();
     setError(null);
     if (!isEdit && !/^[a-z0-9_-]+$/.test(itemKey)) {
-      setError("Item key: lowercase letters, numbers, dashes, underscores only.");
+      setError(t("menus.key_invalid", "Item key: lowercase letters, numbers, dashes, underscores only."));
       return;
     }
     const body: MenuItemInput = { item_key: itemKey, label_key: labelKey, icon, path, roles };
@@ -299,15 +301,15 @@ function MenuItemDialog({ item, onClose }: { item?: MenuItemRow; onClose: () => 
       <DialogContent>
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>{isEdit ? "Edit menu item" : "Add menu item"}</DialogTitle>
+            <DialogTitle>{isEdit ? t("menus.edit_title", "Edit menu item") : t("menus.add_title", "Add menu item")}</DialogTitle>
             <DialogDescription>
-              The label is a translation key — edit its text under Settings → Localization.
+              {t("menus.dialog_desc", "The label is a translation key — edit its text under Settings → Localization.")}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="mi-key">Item key</Label>
+                <Label htmlFor="mi-key">{t("menus.item_key", "Item key")}</Label>
                 <Input
                   id="mi-key"
                   value={itemKey}
@@ -319,7 +321,7 @@ function MenuItemDialog({ item, onClose }: { item?: MenuItemRow; onClose: () => 
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="mi-path">Path</Label>
+                <Label htmlFor="mi-path">{t("menus.path", "Path")}</Label>
                 <Input
                   id="mi-path"
                   value={path}
@@ -331,7 +333,7 @@ function MenuItemDialog({ item, onClose }: { item?: MenuItemRow; onClose: () => 
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="mi-label">Label key</Label>
+              <Label htmlFor="mi-label">{t("menus.label_key", "Label key")}</Label>
               <Input
                 id="mi-label"
                 value={labelKey}
@@ -343,7 +345,7 @@ function MenuItemDialog({ item, onClose }: { item?: MenuItemRow; onClose: () => 
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Icon</Label>
+                <Label>{t("menus.icon", "Icon")}</Label>
                 <div className="flex items-center gap-2">
                   <span className="flex size-9 items-center justify-center rounded-md border">
                     <PreviewIcon className="size-4" />
@@ -363,7 +365,7 @@ function MenuItemDialog({ item, onClose }: { item?: MenuItemRow; onClose: () => 
                 </div>
               </div>
               <div className="space-y-2">
-                <Label>Roles</Label>
+                <Label>{t("menus.roles", "Roles")}</Label>
                 <div className="flex gap-2 pt-1">
                   {ALL_ROLES.map((role) => (
                     <Button
@@ -383,14 +385,14 @@ function MenuItemDialog({ item, onClose }: { item?: MenuItemRow; onClose: () => 
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={pending}>
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button
               type="submit"
               disabled={pending || !itemKey.trim() || !labelKey.trim() || !path.trim()}
             >
               {pending && <Loader2 className="size-4 animate-spin" />}
-              {isEdit ? "Save" : "Add"}
+              {isEdit ? t("common.save", "Save") : t("common.add", "Add")}
             </Button>
           </DialogFooter>
         </form>

@@ -25,7 +25,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useDashboardStats } from "@/features/dashboard/api";
 
 interface Shortcut {
+  titleKey: string;
   title: string;
+  descKey: string;
   description: string;
   to: string;
   icon: LucideIcon;
@@ -33,25 +35,33 @@ interface Shortcut {
 
 const SHORTCUTS: Shortcut[] = [
   {
+    titleKey: "dash.attendance",
     title: "Attendance",
+    descKey: "dash.attendance_desc",
     description: "View the daily register and mark manual overrides.",
     to: "/attendance",
     icon: ClipboardCheck,
   },
   {
+    titleKey: "dash.reports",
     title: "Reports",
+    descKey: "dash.reports_desc",
     description: "Date-range attendance summaries and CSV export.",
     to: "/reports",
     icon: FileBarChart,
   },
   {
+    titleKey: "dash.roster",
     title: "Roster",
+    descKey: "dash.roster_desc",
     description: "Manage enrolled students and parent consent.",
     to: "/roster",
     icon: Users,
   },
   {
+    titleKey: "dash.drivers",
     title: "Drivers",
+    descKey: "dash.drivers_desc",
     description: "Manage bus drivers and their trip activity.",
     to: "/drivers",
     icon: Bus,
@@ -81,9 +91,9 @@ export function DashboardPage() {
                 <MapPin className="size-6" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold">Live Tracking</h2>
+                <h2 className="text-lg font-semibold">{t("dash.live_tracking", "Live Tracking")}</h2>
                 <p className="text-sm text-white/85">
-                  See where every school bus and student is, in real time.
+                  {t("dash.live_tracking_desc", "See where every school bus and student is, in real time.")}
                 </p>
               </div>
             </div>
@@ -91,7 +101,7 @@ export function DashboardPage() {
               variant="secondary"
               className="bg-white text-primary hover:bg-white/90"
             >
-              Open live map
+              {t("dash.open_live_map", "Open live map")}
             </Button>
           </CardContent>
         </Card>
@@ -100,36 +110,36 @@ export function DashboardPage() {
       {/* Live stats */}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          label="Buses online"
+          label={t("dash.buses_online", "Buses online")}
           value={s ? `${s.buses_online}/${s.buses_total}` : undefined}
-          hint={s?.active_trips ? `${s.active_trips} on active trips` : "of your fleet"}
+          hint={s?.active_trips ? `${s.active_trips} ${t("dash.on_active_trips", "on active trips")}` : t("dash.of_your_fleet", "of your fleet")}
           icon={Bus}
           accent="text-primary"
           to="/tracking"
           loading={stats.isLoading}
         />
         <StatCard
-          label="Present today"
+          label={t("dash.present_today", "Present today")}
           value={s ? String(s.students_present) : undefined}
-          hint={s ? `of ${s.consented} consented` : undefined}
+          hint={s ? `${t("dash.of", "of")} ${s.consented} ${t("dash.consented", "consented")}` : undefined}
           icon={UserCheck}
           accent="text-emerald-600"
           to="/attendance"
           loading={stats.isLoading}
         />
         <StatCard
-          label="Pending consents"
+          label={t("dash.pending_consents", "Pending consents")}
           value={s ? String(s.pending_consents) : undefined}
-          hint="awaiting parent opt-in"
+          hint={t("dash.awaiting_opt_in", "awaiting parent opt-in")}
           icon={UserX}
           accent="text-amber-600"
           to="/roster"
           loading={stats.isLoading}
         />
         <StatCard
-          label="Active trips"
+          label={t("dash.active_trips", "Active trips")}
           value={s ? String(s.active_trips) : undefined}
-          hint={s ? `${s.buses_total} buses` : undefined}
+          hint={s ? `${s.buses_total} ${t("dash.buses", "buses")}` : undefined}
           icon={Navigation}
           accent="text-brand-violet"
           to="/tracking"
@@ -139,7 +149,7 @@ export function DashboardPage() {
 
       {/* Quick links */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {SHORTCUTS.map(({ title, description, to, icon: Icon }) => (
+        {SHORTCUTS.map(({ titleKey, title, descKey, description, to, icon: Icon }) => (
           <Link key={to} to={to} className="group">
             <Card className="h-full transition-colors group-hover:border-primary/50">
               <CardHeader className="space-y-3">
@@ -147,9 +157,9 @@ export function DashboardPage() {
                   <Icon className="size-5 text-primary" />
                 </div>
                 <div>
-                  <CardTitle className="text-base">{title}</CardTitle>
+                  <CardTitle className="text-base">{t(titleKey, title)}</CardTitle>
                   <CardDescription className="mt-1">
-                    {description}
+                    {t(descKey, description)}
                   </CardDescription>
                 </div>
               </CardHeader>

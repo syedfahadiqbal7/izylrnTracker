@@ -99,7 +99,7 @@ export function AttendancePage() {
             <RefreshCw
               className={register.isFetching ? "size-4 animate-spin" : "size-4"}
             />
-            Refresh
+            {t("att.refresh", "Refresh")}
           </Button>
         }
       />
@@ -108,17 +108,17 @@ export function AttendancePage() {
       <Card className="mb-6">
         <CardContent className="flex flex-wrap items-end gap-4 pt-6">
           <div className="space-y-2">
-            <Label>Date</Label>
+            <Label>{t("common.date", "Date")}</Label>
             <DatePicker value={date} onChange={(d) => d && setDate(d)} />
           </div>
           <div className="space-y-2">
-            <Label>Class / grade</Label>
+            <Label>{t("att.class_grade", "Class / grade")}</Label>
             <Select value={classGrade} onValueChange={setClassGrade}>
               <SelectTrigger className="w-56">
                 <SelectValue placeholder={t("common.all_classes", "All classes")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={ALL}>All classes</SelectItem>
+                <SelectItem value={ALL}>{t("common.all_classes", "All classes")}</SelectItem>
                 {grades.data?.map((g) => (
                   <SelectItem key={g} value={g}>
                     {g}
@@ -152,7 +152,7 @@ export function AttendancePage() {
           <CardContent className="py-12 text-center text-sm font-medium text-destructive">
             {register.error instanceof ApiClientError
               ? register.error.message
-              : "Failed to load the register."}
+              : t("att.load_error", "Failed to load the register.")}
           </CardContent>
         </Card>
       )}
@@ -172,18 +172,18 @@ export function AttendancePage() {
           <CardContent className="pt-6">
             {rows.length === 0 ? (
               <p className="py-8 text-center text-sm text-muted-foreground">
-                No consented students{classGrade !== ALL ? " in this class" : ""}.
+                {t("att.no_consented", "No consented students")}{classGrade !== ALL ? t("att.in_this_class", " in this class") : ""}.
               </p>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Student</TableHead>
-                    <TableHead>Class</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Arrival</TableHead>
-                    <TableHead>Departure</TableHead>
-                    <TableHead className="text-right">Action</TableHead>
+                    <TableHead>{t("common.student", "Student")}</TableHead>
+                    <TableHead>{t("common.class", "Class")}</TableHead>
+                    <TableHead>{t("common.status", "Status")}</TableHead>
+                    <TableHead>{t("att.arrival", "Arrival")}</TableHead>
+                    <TableHead>{t("att.departure", "Departure")}</TableHead>
+                    <TableHead className="text-right">{t("common.action", "Action")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -211,7 +211,7 @@ export function AttendancePage() {
                           onClick={() => setEditRow(r)}
                         >
                           <PencilLine className="size-4" />
-                          Override
+                          {t("att.override", "Override")}
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -244,6 +244,7 @@ function OverrideDialog({
   timezone: string | undefined;
   onClose: () => void;
 }) {
+  const t = useT();
   const mutation = useSetManualAttendance();
   const [status, setStatus] = useState<AttendanceStatus>("on_time");
   const [time, setTime] = useState<string>("");
@@ -275,7 +276,7 @@ function OverrideDialog({
       setError(
         err instanceof ApiClientError
           ? err.message
-          : "Could not save the override.",
+          : t("att.save_error", "Could not save the override."),
       );
     }
   };
@@ -286,7 +287,7 @@ function OverrideDialog({
     <Dialog open={row !== null} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Override attendance</DialogTitle>
+          <DialogTitle>{t("att.override_title", "Override attendance")}</DialogTitle>
           <DialogDescription>
             {row?.child_name}
             {row?.class_grade ? ` · ${row.class_grade}` : ""} · {date}
@@ -295,7 +296,7 @@ function OverrideDialog({
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label>Status</Label>
+            <Label>{t("common.status", "Status")}</Label>
             <Select
               value={status}
               onValueChange={(v) => setStatus(v as AttendanceStatus)}
@@ -315,9 +316,9 @@ function OverrideDialog({
 
           <div className="space-y-2">
             <Label>
-              Arrival time{" "}
+              {t("att.arrival_time", "Arrival time")}{" "}
               <span className="font-normal text-muted-foreground">
-                (optional{timezone ? `, ${timezone}` : ""})
+                ({t("att.optional", "optional")}{timezone ? `, ${timezone}` : ""})
               </span>
             </Label>
             <Input
@@ -328,7 +329,7 @@ function OverrideDialog({
             />
             {!timeAllowed && (
               <p className="text-xs text-muted-foreground">
-                Arrival time doesn't apply to an absent student.
+                {t("att.absent_no_time", "Arrival time doesn't apply to an absent student.")}
               </p>
             )}
           </div>
@@ -340,13 +341,13 @@ function OverrideDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={mutation.isPending}>
-            Cancel
+            {t("common.cancel", "Cancel")}
           </Button>
           <Button onClick={submit} disabled={mutation.isPending}>
             {mutation.isPending && (
               <Loader2 className="size-4 animate-spin" />
             )}
-            Save override
+            {t("att.save_override", "Save override")}
           </Button>
         </DialogFooter>
       </DialogContent>

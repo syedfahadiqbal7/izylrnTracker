@@ -52,8 +52,8 @@ import {
   type Driver,
 } from "@/features/drivers/api";
 
-function fmtLastLogin(iso: string | null) {
-  return iso ? format(new Date(iso), "d MMM yyyy, HH:mm") : "Never";
+function fmtLastLogin(t: ReturnType<typeof useT>, iso: string | null) {
+  return iso ? format(new Date(iso), "d MMM yyyy, HH:mm") : t("drivers.never", "Never");
 }
 
 export function DriversPage() {
@@ -74,7 +74,7 @@ export function DriversPage() {
         actions={
           <Button onClick={() => setAddOpen(true)}>
             <Plus className="size-4" />
-            Add driver
+            {t("drivers.add_driver", "Add driver")}
           </Button>
         }
       />
@@ -84,7 +84,7 @@ export function DriversPage() {
           <CardContent className="py-12 text-center text-sm font-medium text-destructive">
             {drivers.error instanceof ApiClientError
               ? drivers.error.message
-              : "Failed to load drivers."}
+              : t("drivers.load_failed", "Failed to load drivers.")}
           </CardContent>
         </Card>
       )}
@@ -110,18 +110,18 @@ export function DriversPage() {
                 </p>
                 <Button variant="outline" onClick={() => setAddOpen(true)}>
                   <Plus className="size-4" />
-                  Add driver
+                  {t("drivers.add_driver", "Add driver")}
                 </Button>
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Phone</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Last login</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>{t("common.name", "Name")}</TableHead>
+                    <TableHead>{t("common.phone", "Phone")}</TableHead>
+                    <TableHead>{t("common.status", "Status")}</TableHead>
+                    <TableHead>{t("common.last_login", "Last login")}</TableHead>
+                    <TableHead className="text-right">{t("common.actions", "Actions")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -134,33 +134,33 @@ export function DriversPage() {
                       <TableCell>
                         <div className="flex flex-wrap items-center gap-1.5">
                           <Badge variant={d.active ? "success" : "muted"}>
-                            {d.active ? "Active" : "Inactive"}
+                            {d.active ? t("common.active", "Active") : t("common.inactive", "Inactive")}
                           </Badge>
                           {!d.has_access_code && (
                             <Badge variant="warning" className="gap-1">
                               <ShieldAlert className="size-3" />
-                              No code
+                              {t("drivers.no_code", "No code")}
                             </Badge>
                           )}
                         </div>
                       </TableCell>
                       <TableCell className="tabular-nums text-muted-foreground">
-                        {fmtLastLogin(d.last_login_at)}
+                        {fmtLastLogin(t, d.last_login_at)}
                       </TableCell>
                       <TableCell className="text-right">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="icon">
                               <MoreHorizontal className="size-4" />
-                              <span className="sr-only">Open actions</span>
+                              <span className="sr-only">{t("drivers.open_actions", "Open actions")}</span>
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => setCodeFor(d)}>
                               <KeyRound className="size-4" />
                               {d.has_access_code
-                                ? "Reset access code"
-                                : "Set access code"}
+                                ? t("drivers.reset_access_code", "Reset access code")
+                                : t("drivers.set_access_code", "Set access code")}
                             </DropdownMenuItem>
                             <DropdownMenuItem
                               disabled={setActive.isPending}
@@ -169,7 +169,7 @@ export function DriversPage() {
                               }
                             >
                               <Power className="size-4" />
-                              {d.active ? "Deactivate" : "Reactivate"}
+                              {d.active ? t("drivers.deactivate", "Deactivate") : t("drivers.reactivate", "Reactivate")}
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
@@ -177,7 +177,7 @@ export function DriversPage() {
                               onClick={() => setDeleteFor(d)}
                             >
                               <Trash2 className="size-4" />
-                              Delete
+                              {t("common.delete", "Delete")}
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -205,6 +205,7 @@ function AddDriverDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const t = useT();
   const create = useCreateDriver();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -238,7 +239,7 @@ function AddDriverDialog({
       setError(
         err instanceof ApiClientError
           ? err.message
-          : "Could not add the driver.",
+          : t("drivers.add_failed", "Could not add the driver."),
       );
     }
   };
@@ -248,29 +249,28 @@ function AddDriverDialog({
       <DialogContent>
         <form onSubmit={submit}>
           <DialogHeader>
-            <DialogTitle>Add driver</DialogTitle>
+            <DialogTitle>{t("drivers.add_driver", "Add driver")}</DialogTitle>
             <DialogDescription>
-              Create a bus driver for your school. An access code lets them log
-              into the driver app — you can set it now or later.
+              {t("drivers.add_desc", "Create a bus driver for your school. An access code lets them log into the driver app — you can set it now or later.")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="d-name">Name</Label>
+              <Label htmlFor="d-name">{t("common.name", "Name")}</Label>
               <Input
                 id="d-name"
                 required
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Ravi Kumar"
+                placeholder={t("drivers.name_placeholder", "e.g. Ravi Kumar")}
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="d-phone">
-                Phone{" "}
+                {t("common.phone", "Phone")}{" "}
                 <span className="font-normal text-muted-foreground">
-                  (optional)
+                  {t("drivers.optional", "(optional)")}
                 </span>
               </Label>
               <Input
@@ -282,9 +282,9 @@ function AddDriverDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor="d-code">
-                Access code{" "}
+                {t("drivers.access_code", "Access code")}{" "}
                 <span className="font-normal text-muted-foreground">
-                  (optional, min 6)
+                  {t("drivers.optional_min6", "(optional, min 6)")}
                 </span>
               </Label>
               <div className="flex gap-2">
@@ -292,19 +292,19 @@ function AddDriverDialog({
                   id="d-code"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
-                  placeholder="Leave blank to set later"
+                  placeholder={t("drivers.code_placeholder", "Leave blank to set later")}
                 />
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setCode(randomAccessCode())}
                 >
-                  Generate
+                  {t("drivers.generate", "Generate")}
                 </Button>
               </div>
               {codeInvalid && (
                 <p className="text-xs text-destructive">
-                  Access code must be at least 6 characters.
+                  {t("drivers.code_too_short", "Access code must be at least 6 characters.")}
                 </p>
               )}
             </div>
@@ -320,14 +320,14 @@ function AddDriverDialog({
               onClick={onClose}
               disabled={create.isPending}
             >
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button
               type="submit"
               disabled={create.isPending || !name.trim() || codeInvalid}
             >
               {create.isPending && <Loader2 className="size-4 animate-spin" />}
-              Add driver
+              {t("drivers.add_driver", "Add driver")}
             </Button>
           </DialogFooter>
         </form>
@@ -343,6 +343,7 @@ function SetCodeDialog({
   driver: Driver | null;
   onClose: () => void;
 }) {
+  const t = useT();
   const setCode = useSetDriverCode();
   const [code, setCodeValue] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -367,7 +368,7 @@ function SetCodeDialog({
       setError(
         err instanceof ApiClientError
           ? err.message
-          : "Could not save the access code.",
+          : t("drivers.save_code_failed", "Could not save the access code."),
       );
     }
   };
@@ -378,30 +379,32 @@ function SetCodeDialog({
         <form onSubmit={submit}>
           <DialogHeader>
             <DialogTitle>
-              {driver?.has_access_code ? "Reset" : "Set"} access code
+              {driver?.has_access_code
+                ? t("drivers.reset_access_code", "Reset access code")
+                : t("drivers.set_access_code", "Set access code")}
             </DialogTitle>
             <DialogDescription>
-              {driver?.name} will use this code (with their phone) to log into
-              the driver app. Share it with them securely.
+              {driver?.name}
+              {t("drivers.set_code_desc", " will use this code (with their phone) to log into the driver app. Share it with them securely.")}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2 py-4">
-            <Label htmlFor="set-code">Access code (min 6)</Label>
+            <Label htmlFor="set-code">{t("drivers.access_code_min6", "Access code (min 6)")}</Label>
             <div className="flex gap-2">
               <Input
                 id="set-code"
                 autoFocus
                 value={code}
                 onChange={(e) => setCodeValue(e.target.value)}
-                placeholder="e.g. 483920"
+                placeholder={t("drivers.code_example", "e.g. 483920")}
               />
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setCodeValue(randomAccessCode())}
               >
-                Generate
+                {t("drivers.generate", "Generate")}
               </Button>
             </div>
             {error && (
@@ -416,11 +419,11 @@ function SetCodeDialog({
               onClick={onClose}
               disabled={setCode.isPending}
             >
-              Cancel
+              {t("common.cancel", "Cancel")}
             </Button>
             <Button type="submit" disabled={setCode.isPending || tooShort}>
               {setCode.isPending && <Loader2 className="size-4 animate-spin" />}
-              Save code
+              {t("drivers.save_code", "Save code")}
             </Button>
           </DialogFooter>
         </form>
@@ -436,6 +439,7 @@ function DeleteDriverDialog({
   driver: Driver | null;
   onClose: () => void;
 }) {
+  const t = useT();
   const del = useDeleteDriver();
   const [error, setError] = useState<string | null>(null);
 
@@ -449,7 +453,7 @@ function DeleteDriverDialog({
       setError(
         err instanceof ApiClientError
           ? err.message
-          : "Could not delete the driver.",
+          : t("drivers.delete_failed", "Could not delete the driver."),
       );
     }
   };
@@ -458,10 +462,11 @@ function DeleteDriverDialog({
     <Dialog open={driver !== null} onOpenChange={(o) => !o && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Delete driver</DialogTitle>
+          <DialogTitle>{t("drivers.delete_driver", "Delete driver")}</DialogTitle>
           <DialogDescription>
-            Delete <span className="font-medium">{driver?.name}</span>? This
-            revokes their access and can't be undone.
+            {t("drivers.delete_prefix", "Delete")}{" "}
+            <span className="font-medium">{driver?.name}</span>
+            {t("drivers.delete_suffix", "? This revokes their access and can't be undone.")}
           </DialogDescription>
         </DialogHeader>
         {error && (
@@ -469,7 +474,7 @@ function DeleteDriverDialog({
         )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={del.isPending}>
-            Cancel
+            {t("common.cancel", "Cancel")}
           </Button>
           <Button
             variant="destructive"
@@ -477,7 +482,7 @@ function DeleteDriverDialog({
             disabled={del.isPending}
           >
             {del.isPending && <Loader2 className="size-4 animate-spin" />}
-            Delete
+            {t("common.delete", "Delete")}
           </Button>
         </DialogFooter>
       </DialogContent>
