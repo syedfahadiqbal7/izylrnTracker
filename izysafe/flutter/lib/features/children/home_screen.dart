@@ -21,6 +21,14 @@ class HomeScreen extends ConsumerWidget {
     final t = ref.watch(translatorProvider);
 
     return Scaffold(
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => showDialog<void>(
+          context: context,
+          builder: (_) => const _AddChildDialog(),
+        ),
+        icon: const Icon(Icons.add),
+        label: Text(t.t('home.add_child', 'Add child')),
+      ),
       appBar: AppBar(
         titleSpacing: 20,
         title: Row(
@@ -271,4 +279,108 @@ class _ErrorState extends StatelessWidget {
 
 extension _IfEmpty on String {
   String ifEmpty(String fallback) => trim().isEmpty ? fallback : this;
+}
+
+/// Create a child (POST /children). The creator becomes the primary parent.
+class _AddChildDialog extends ConsumerStatefulWidget {
+  const _AddChildDialog();
+  @override
+  ConsumerState<_AddChildDialog> createState() => _AddChildDialogState();
+}
+
+class _AddChildDialogState extends ConsumerState<_AddChildDialog> {
+  final _name = TextEditingController();
+  final _grade = TextEditingController();
+  bool _busy = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _grade.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final t = ref.read(translatorProvider);
+    final name = _name.text.trim();
+    if (name.length < 2) {
+      setState(() => _error = t.t('child.name_too_short', 'Enter the child\'s name'));
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await ref.read(apiClientProvider).post('/children', body: {
+        'name': name,
+        if (_grade.text.trim().isNotEmpty) 'class_grade': _grade.text.trim(),
+      });
+      ref.invalidate(childrenProvider);
+      await ref.read(childrenProvider.future);
+      if (mounted) Navigator.of(context).pop();
+    } on ApiException catch (e) {
+      setState(() => _error = e.message);
+    } catch (_) {
+      setState(() => _error =
+          t.t('child.add_error', 'Could not add the child. Please try again.'));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = ref.watch(translatorProvider);
+    return AlertDialog(
+      title: Text(t.t('home.add_child', 'Add child')),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _name,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            decoration: InputDecoration(
+              labelText: t.t('child.name', 'Name'),
+              hintText: t.t('child.name_hint', 'e.g. Ahmed'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _grade,
+            decoration: InputDecoration(
+              labelText: '${t.t('child.class_grade', 'Class / grade')} '
+                  '(${t.t('common.optional', 'optional')})',
+              hintText: t.t('child.grade_hint', 'e.g. Kg1-J'),
+            ),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(_error!,
+                style: const TextStyle(
+                    color: Colors.red, fontWeight: FontWeight.w500)),
+          ],
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _busy ? null : () => Navigator.of(context).pop(),
+          child: Text(t.t('common.cancel', 'Cancel')),
+        ),
+        FilledButton(
+          onPressed: _busy ? null : _save,
+          child: _busy
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2.4, color: Colors.white))
+              : Text(t.t('common.add', 'Add')),
+        ),
+      ],
+    );
+  }
 }

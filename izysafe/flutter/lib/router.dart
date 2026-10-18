@@ -33,7 +33,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
       final loggedIn = auth.status == AuthStatus.authenticated;
       if (loggedIn) {
-        if (loc == '/' || loc == '/login') return '/home';
+        // After OTP verify we're on /otp — send authenticated users straight to
+        // /home from the splash, login AND otp screens (no manual refresh needed).
+        if (loc == '/' || loc == '/login' || loc == '/otp') return '/home';
         return null;
       }
       // not logged in — allow /login and /otp
