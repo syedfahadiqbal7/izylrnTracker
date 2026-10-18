@@ -87,3 +87,64 @@ export function useRemoveEnrollment() {
     },
   });
 }
+
+// --------------------------------------------------------------------------- //
+// Student devices (school-provisioned trackers) — /schools/students/{id}/devices
+// --------------------------------------------------------------------------- //
+export interface StudentDevice {
+  id: string;
+  child_id: string | null;
+  name: string;
+  device_type: string;
+  imei: string;
+  traccar_id: number | null;
+  last_battery: number | null;
+  last_seen_at: string | null;
+  is_online: boolean;
+  active: boolean;
+  created_at: string;
+}
+
+export function useStudentDevices(childId: string | null) {
+  return useQuery({
+    queryKey: ["student-devices", childId],
+    queryFn: () =>
+      apiGetList<StudentDevice[]>(`/schools/students/${childId}/devices`) as Promise<{
+        items: StudentDevice[];
+      }>,
+    enabled: !!childId,
+  });
+}
+
+export interface AddDeviceInput {
+  name: string;
+  imei: string;
+}
+
+export function useAddStudentDevice(childId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AddDeviceInput) =>
+      apiPost<StudentDevice>(`/schools/students/${childId}/devices`, {
+        name: input.name,
+        imei: input.imei,
+      }),
+    onSuccess: (d) => {
+      toast.success(`Device "${d.name}" paired`);
+      qc.invalidateQueries({ queryKey: ["student-devices", childId] });
+      qc.invalidateQueries({ queryKey: ["roster"] });
+    },
+  });
+}
+
+export function useRemoveStudentDevice(childId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (deviceId: string) =>
+      apiDelete(`/schools/students/devices/${deviceId}`),
+    onSuccess: () => {
+      toast.success("Device removed");
+      qc.invalidateQueries({ queryKey: ["student-devices", childId] });
+    },
+  });
+}
