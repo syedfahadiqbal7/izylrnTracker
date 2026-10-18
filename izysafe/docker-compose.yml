@@ -68,6 +68,7 @@ services:
       - "5023:5023"   # GT06   (primary)
       - "5002:5002"   # TK103
       - "5013:5013"   # H02
+      - "5055:5055"   # OsmAnd (Traccar Client phone app — use a phone as a test tracker)
     volumes:
       - ./traccar/traccar.xml:/opt/traccar/conf/traccar.xml:ro
       - ./data/traccar/logs:/opt/traccar/logs
