@@ -55,7 +55,9 @@ export function RouteStopsMap({
     <MapContainer
       center={points[0] ?? INDIA_CENTER}
       zoom={points.length ? 13 : 5}
-      className="h-full w-full"
+      // `isolate` contains Leaflet's internal z-indexes (panes/controls up to ~1000)
+      // in their own stacking context so they never paint over modal dialogs (z-50).
+      className="h-full w-full isolate"
       scrollWheelZoom
     >
       <TileLayer
