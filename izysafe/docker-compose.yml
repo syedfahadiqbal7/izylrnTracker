@@ -146,6 +146,10 @@ services:
     restart: unless-stopped
     working_dir: /app
     command: sh -c "npm install && npm run dev"
+    environment:
+      # Bind-mount file events don't reach the container on Windows/macOS, so make
+      # Vite's watcher poll — otherwise edits never hot-reload (stale code served).
+      CHOKIDAR_USEPOLLING: "true"
     ports:
       - "5173:5173"
     volumes:
