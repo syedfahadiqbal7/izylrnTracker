@@ -40,6 +40,7 @@ from app.schemas.school import (
     EnrollStudentRequest,
     ForgotPasswordRequest,
     ManualAttendanceRequest,
+    ParentUpdateRequest,
     PasswordChangeRequest,
     ResetPasswordRequest,
     SchoolAdminManageRequest,
@@ -471,6 +472,60 @@ async def remove_student_device(
     await DeviceService(db, redis, traccar).delete_device_for_school(
         admin.school_id, device_id
     )
+    return Response(status_code=204)
+
+
+# --------------------------------------------------------------------------- #
+# Parents (Model 1 — school manages the parents of its enrolled students)      #
+# --------------------------------------------------------------------------- #
+def _parent(p: dict) -> dict:
+    return {
+        "id": str(p["id"]),
+        "name": p["name"],
+        "phone": p["phone"],
+        "last_login_at": p["last_login_at"].isoformat() if p["last_login_at"] else None,
+        "child_count": len(p["children"]),
+        "children": p["children"],
+    }
+
+
+@router.get("/parents")
+async def list_parents(
+    q: str | None = Query(None, max_length=100),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Parents of students enrolled at the admin's school (search by name/phone)."""
+    parents, total = await EnrollmentService(db).list_parents(
+        admin, q=q, limit=limit, offset=offset
+    )
+    return success([_parent(p) for p in parents],
+                   meta={"total": total, "limit": limit, "offset": offset})
+
+
+@router.put("/parents/{user_id}")
+async def update_parent(
+    user_id: uuid.UUID,
+    payload: ParentUpdateRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Update a parent's name (Model 1: school-provisioned detail)."""
+    parent = await EnrollmentService(db).update_parent(admin, user_id, payload.name)
+    return success({"id": str(parent.id), "name": parent.name, "phone": parent.phone})
+
+
+@router.delete("/parents/{user_id}", status_code=204)
+async def remove_parent(
+    user_id: uuid.UUID,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Remove a parent from this school (deletes their enrollments here → revokes app
+    access once they have no active enrollment anywhere). Account + history retained."""
+    await EnrollmentService(db).remove_parent(admin, user_id)
     return Response(status_code=204)
 
 

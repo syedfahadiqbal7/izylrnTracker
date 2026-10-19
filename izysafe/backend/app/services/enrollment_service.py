@@ -19,7 +19,7 @@ import logging
 import uuid
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIException
@@ -216,6 +216,129 @@ class EnrollmentService:
             enrollment_id, enrollment.parent_opt_in, enrollment.bus_opt_in,
         )
         return enrollment
+
+    # ------------------------------------------------- parents (Model 1 admin)
+    async def list_parents(
+        self, admin: SchoolAdmin, *, q: str | None, limit: int, offset: int
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Parents (primary guardians) of students enrolled at the admin's school,
+        with the children they have AT THIS SCHOOL. Model 1 scoping: a school only
+        sees parents of its own enrolled students."""
+        base = (
+            select(User.id, User.name, User.phone, User.last_login_at)
+            .join(FamilyMember, FamilyMember.user_id == User.id)
+            .join(Child, Child.id == FamilyMember.child_id)
+            .join(StudentEnrollment, StudentEnrollment.child_id == Child.id)
+            .where(
+                StudentEnrollment.school_id == admin.school_id,
+                FamilyMember.is_primary.is_(True),
+                Child.deleted_at.is_(None),
+                User.deleted_at.is_(None),
+            )
+            .distinct()
+        )
+        if q:
+            like = f"%{q.strip().lower()}%"
+            base = base.where(
+                or_(func.lower(func.coalesce(User.name, "")).like(like), User.phone.like(like))
+            )
+        total = (
+            await self.db.execute(select(func.count()).select_from(base.subquery()))
+        ).scalar_one()
+        rows = (
+            await self.db.execute(
+                base.order_by(User.name.nulls_last(), User.phone).limit(limit).offset(offset)
+            )
+        ).all()
+        parents: list[dict[str, Any]] = [
+            {"id": r.id, "name": r.name, "phone": r.phone,
+             "last_login_at": r.last_login_at, "children": []}
+            for r in rows
+        ]
+        if parents:
+            by_id = {p["id"]: p for p in parents}
+            crows = (
+                await self.db.execute(
+                    select(
+                        User.id, Child.name, StudentEnrollment.class_grade,
+                        StudentEnrollment.parent_opt_in, StudentEnrollment.location_opt_in,
+                    )
+                    .join(FamilyMember, FamilyMember.user_id == User.id)
+                    .join(Child, Child.id == FamilyMember.child_id)
+                    .join(StudentEnrollment, StudentEnrollment.child_id == Child.id)
+                    .where(
+                        StudentEnrollment.school_id == admin.school_id,
+                        FamilyMember.is_primary.is_(True),
+                        Child.deleted_at.is_(None),
+                        User.id.in_(list(by_id.keys())),
+                    )
+                    .order_by(Child.name)
+                )
+            ).all()
+            for cr in crows:
+                by_id[cr.id]["children"].append({
+                    "name": cr.name, "class_grade": cr.class_grade,
+                    "parent_opt_in": cr.parent_opt_in, "location_opt_in": cr.location_opt_in,
+                })
+        return parents, total
+
+    async def update_parent(
+        self, admin: SchoolAdmin, user_id: uuid.UUID, name: str | None
+    ) -> User:
+        parent = await self._require_parent_at_school(admin, user_id)
+        parent.name = (name or "").strip() or None
+        AuditService.log(self.db, action="parent.update", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="user", entity_id=parent.id,
+                         details={"name": parent.name})
+        await self.db.commit()
+        await self.db.refresh(parent)
+        return parent
+
+    async def remove_parent(self, admin: SchoolAdmin, user_id: uuid.UUID) -> None:
+        """Remove a parent from this school: delete the school's enrollments for all
+        their (primary) children. Model 1 — this revokes the parent's app access once
+        they have no active enrollment anywhere. The account + history are retained."""
+        await self._require_parent_at_school(admin, user_id)
+        enrollments = (
+            await self.db.execute(
+                select(StudentEnrollment)
+                .join(Child, Child.id == StudentEnrollment.child_id)
+                .join(FamilyMember, FamilyMember.child_id == Child.id)
+                .where(
+                    StudentEnrollment.school_id == admin.school_id,
+                    FamilyMember.user_id == user_id,
+                    FamilyMember.is_primary.is_(True),
+                )
+            )
+        ).scalars().all()
+        for e in enrollments:
+            await self.db.delete(e)
+        AuditService.log(self.db, action="parent.remove", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="user", entity_id=user_id,
+                         details={"removed_enrollments": len(enrollments)})
+        await self.db.commit()
+
+    async def _require_parent_at_school(self, admin: SchoolAdmin, user_id: uuid.UUID) -> User:
+        parent = (
+            await self.db.execute(
+                select(User)
+                .join(FamilyMember, FamilyMember.user_id == User.id)
+                .join(Child, Child.id == FamilyMember.child_id)
+                .join(StudentEnrollment, StudentEnrollment.child_id == Child.id)
+                .where(
+                    User.id == user_id,
+                    StudentEnrollment.school_id == admin.school_id,
+                    FamilyMember.is_primary.is_(True),
+                    User.deleted_at.is_(None),
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if parent is None:
+            raise APIException(404, "PARENT_NOT_FOUND", "No such parent at your school")
+        return parent
 
     # ---------------------------------------------------------------- helpers
     async def _resolve_or_create_child(self, phone: str, child_name: str | None) -> Child:

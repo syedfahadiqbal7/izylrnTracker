@@ -19,6 +19,7 @@ export const NAV_ITEMS: NavItem[] = [
   { labelKey: "nav.attendance", to: "/attendance", iconName: "ClipboardCheck" },
   { labelKey: "nav.reports", to: "/reports", iconName: "FileBarChart" },
   { labelKey: "nav.roster", to: "/roster", iconName: "Users" },
+  { labelKey: "nav.parents", to: "/parents", iconName: "UsersRound", adminOnly: true },
   { labelKey: "nav.routes", to: "/routes", iconName: "Route" },
   { labelKey: "nav.drivers", to: "/drivers", iconName: "Truck" },
   { labelKey: "nav.audit", to: "/audit", iconName: "ScrollText", adminOnly: true },

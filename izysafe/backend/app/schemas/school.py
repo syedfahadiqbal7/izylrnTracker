@@ -144,6 +144,10 @@ class EnrollStudentRequest(BaseModel):
     class_grade: str | None = Field(None, max_length=50)
 
 
+class ParentUpdateRequest(BaseModel):
+    name: str | None = Field(None, max_length=100)
+
+
 class EnrollmentResponse(BaseModel):
     """School-facing roster row."""
 
