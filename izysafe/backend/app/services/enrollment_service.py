@@ -40,9 +40,11 @@ class EnrollmentService:
 
     # ------------------------------------------------------------ school side
     async def enroll(self, admin: SchoolAdmin, data: dict[str, Any]) -> tuple[StudentEnrollment, Child]:
-        """Enroll a student by the parent's phone (school resolves the exact child)."""
+        """Enroll a student by the parent's phone. Model 1 (school-gated): the school
+        PROVISIONS the parent + child — if either doesn't exist yet, they are created
+        here (the parent later signs in by OTP to that account)."""
         phone = validate_phone(data["phone"])
-        child = await self._resolve_child(phone, data.get("child_name"))
+        child = await self._resolve_or_create_child(phone, data.get("child_name"))
 
         existing = (
             await self.db.execute(
@@ -216,16 +218,28 @@ class EnrollmentService:
         return enrollment
 
     # ---------------------------------------------------------------- helpers
-    async def _resolve_child(self, phone: str, child_name: str | None) -> Child:
+    async def _resolve_or_create_child(self, phone: str, child_name: str | None) -> Child:
+        """Model 1 (school-gated) onboarding: find the parent + child, or CREATE them.
+
+        - Parent not found → create a parent User for this phone (they'll sign in by OTP).
+        - A matching primary-parent child exists → reuse it.
+        - No matching child → create one (the school is provisioning this student); the
+          student's name is then required.
+        """
         parent = (
             await self.db.execute(
                 select(User).where(User.phone == phone, User.deleted_at.is_(None))
             )
         ).scalar_one_or_none()
         if parent is None:
-            raise APIException(
-                404, "PARENT_NOT_FOUND", "No parent account for this number — ask them to install the app first"
+            parent = User(
+                phone=phone,
+                country_code="+971" if phone.startswith("+971") else "+91",
             )
+            self.db.add(parent)
+            await self.db.flush()
+            logger.info("Provisioned new parent account for %s (school-driven)", phone)
+
         stmt = (
             select(Child)
             .join(FamilyMember, FamilyMember.child_id == Child.id)
@@ -239,11 +253,26 @@ class EnrollmentService:
             stmt = stmt.where(func.lower(Child.name) == child_name.strip().lower())
         children = (await self.db.execute(stmt)).scalars().all()
 
-        if not children:
-            raise APIException(404, "CHILD_NOT_FOUND", "No matching student for this parent")
+        if len(children) == 1:
+            return children[0]
         if len(children) > 1:
             raise APIException(409, "AMBIGUOUS_CHILD", "Provide the student's name — this parent has multiple children")
-        return children[0]
+
+        # No matching child → provision one. A name is required to create it.
+        if not child_name or not child_name.strip():
+            raise APIException(400, "CHILD_NAME_REQUIRED", "Enter the student's name to enroll them")
+        child = Child(name=child_name.strip())
+        self.db.add(child)
+        await self.db.flush()
+        self.db.add(
+            FamilyMember(
+                child_id=child.id, user_id=parent.id, role="parent",
+                is_primary=True, can_view=True, can_call=True, can_manage=True,
+            )
+        )
+        await self.db.flush()
+        logger.info("Provisioned child %s for parent %s (school-driven)", child.id, phone)
+        return child
 
     async def _require_own(self, admin: SchoolAdmin, enrollment_id: uuid.UUID) -> StudentEnrollment:
         enrollment = (
