@@ -27,6 +27,7 @@ from app.core.validators import validate_phone
 from app.models.child import Child, FamilyMember
 from app.models.school import StudentEnrollment
 from app.models.user import OtpSession, User
+from app.services.app_config_service import AppConfigService
 from app.services.otp_gateway import OtpGateway
 
 logger = logging.getLogger("izysafe.otp")
@@ -183,12 +184,27 @@ class OtpService:
             raise APIException(429, code, message)
 
     async def _deliver(self, phone: str, otp: str) -> str:
-        if await self.gateway.send_whatsapp(phone, otp):
-            return "whatsapp"
-        if await self.gateway.send_sms(phone, otp):
-            return "sms"
-        # Dev fallback: no OTP provider configured (MSG91/Twilio). Log the code so
-        # local dev + testing can complete the flow. NEVER happens in production.
+        """Try each admin-configured channel in order; return the one that delivered.
+
+        The channel list is app-wide config (AppConfigService), defaulting to the
+        historic WhatsApp -> SMS fallback. Email is skipped for a user with no email
+        on file (parents authenticate by phone; email is optional profile data), so
+        delivery falls through to the next enabled channel."""
+        channels = await AppConfigService(self.db).get_otp_channels()
+        for channel in channels:
+            if channel == "whatsapp":
+                if await self.gateway.send_whatsapp(phone, otp):
+                    return "whatsapp"
+            elif channel == "sms":
+                if await self.gateway.send_sms(phone, otp):
+                    return "sms"
+            elif channel == "email":
+                email = await self._email_for(phone)
+                if email and await self.gateway.send_email(email, otp):
+                    return "email"
+                # No email on file (or send failed) ⇒ fall through to next channel.
+        # Dev fallback: nothing delivered (no provider configured / all failed). Log
+        # the code so local dev + testing can complete the flow. NEVER in production.
         if not settings.is_production:
             logger.warning("DEV OTP for %s = %s (no provider configured)", phone, otp)
             return "dev"
@@ -196,3 +212,8 @@ class OtpService:
             502, "OTP_SEND_FAILED",
             "Could not send OTP — please verify your phone number is correct and try again",
         )
+
+    async def _email_for(self, phone: str) -> str | None:
+        """The OTP recipient email for a phone, or None when none is on file."""
+        user = await self._get_user(phone)
+        return user.email if user and user.email else None

@@ -88,8 +88,8 @@ CREATE TABLE otp_sessions (
     otp_hash    VARCHAR(100) NOT NULL,          -- bcrypt hash, never plaintext
     attempts    INTEGER      NOT NULL DEFAULT 0,
     verified    BOOLEAN      NOT NULL DEFAULT FALSE,
-    channel     VARCHAR(10)  DEFAULT 'whatsapp' -- whatsapp | sms (which one delivered)
-                CHECK (channel IN ('whatsapp','sms')),
+    channel     VARCHAR(10)  DEFAULT 'whatsapp' -- whatsapp | sms | email (which one delivered)
+                CHECK (channel IN ('whatsapp','sms','email')),
     expires_at  TIMESTAMPTZ  NOT NULL,          -- created_at + 10 min
     created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
@@ -613,6 +613,17 @@ CREATE TABLE menu_items (
     updated_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_menu_items_platform ON menu_items (platform, sort_order);
+
+-- Generic app-wide, admin-managed key/value config (migration 0026). Mirrors the
+-- i18n/menu precedent: app-wide (not school-scoped), edited from the Web Admin
+-- Panel (role='admin'). Each row is one setting; `value` is JSONB. First use:
+-- `otp_channels` = {"channels": [...]} — the ordered OTP delivery fallback list
+-- (seeded by migration 0026; see app_config_service.AppConfigService).
+CREATE TABLE app_config (
+    key        VARCHAR(60) PRIMARY KEY,
+    value      JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- ============================================================================
 -- 13. SCHOOL TIER — admin, enrollment, attendance, buses (F26–F28)

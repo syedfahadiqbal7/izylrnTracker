@@ -67,7 +67,7 @@ class User(Base, UUIDPkMixin, TimestampMixin, UpdatedAtMixin, SoftDeleteMixin):
 class OtpSession(Base, UUIDPkMixin, TimestampMixin):
     __tablename__ = "otp_sessions"
     __table_args__ = (
-        CheckConstraint("channel IN ('whatsapp','sms')", name="ck_otp_channel"),
+        CheckConstraint("channel IN ('whatsapp','sms','email')", name="ck_otp_channel"),
         Index("idx_otp_phone", "phone", "expires_at"),
     )
 

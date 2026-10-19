@@ -1,5 +1,5 @@
 """Integrations (Phase 3): izylrn_links, wearable_integrations, translations (i18n),
-menu_items (admin-managed dynamic navigation)."""
+menu_items (admin-managed dynamic navigation), app_config (admin-managed app-wide config)."""
 from __future__ import annotations
 
 import uuid
@@ -101,4 +101,23 @@ class MenuItem(Base, UUIDPkMixin, TimestampMixin, UpdatedAtMixin):
     visible: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     roles: Mapped[list] = mapped_column(
         JSONB, nullable=False, server_default=text("'[\"admin\",\"staff\"]'::jsonb")
+    )
+
+
+class AppConfig(Base):
+    """Generic app-wide, admin-managed key/value config (migration 0026).
+
+    Mirrors the Translation/MenuItem precedent: app-wide (not school-scoped),
+    edited from the Web Admin Panel (role='admin'). Each row is one setting; the
+    payload is JSONB so a setting can hold structured data. First consumer is the
+    ``otp_channels`` row — ``{"channels": [...]}``, the ordered OTP delivery
+    fallback list read by ``AppConfigService`` / ``OtpService._deliver``.
+    """
+
+    __tablename__ = "app_config"
+
+    key: Mapped[str] = mapped_column(String(60), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )

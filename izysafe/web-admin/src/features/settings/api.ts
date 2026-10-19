@@ -123,3 +123,29 @@ export function useDeleteAdmin() {
     },
   });
 }
+
+// --------------------------------------------------- OTP delivery channel (app-wide)
+export type OtpChannel = "whatsapp" | "sms" | "email";
+
+export interface OtpChannels {
+  channels: OtpChannel[];
+}
+
+export function useOtpChannels() {
+  return useQuery({
+    queryKey: ["otp-channels"],
+    queryFn: () => apiGet<OtpChannels>("/schools/otp-channels"),
+  });
+}
+
+export function useUpdateOtpChannels() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (channels: OtpChannel[]) =>
+      apiPut<OtpChannels>("/schools/otp-channels", { channels }),
+    onSuccess: () => {
+      toast.success("OTP channels saved");
+      qc.invalidateQueries({ queryKey: ["otp-channels"] });
+    },
+  });
+}

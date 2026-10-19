@@ -63,6 +63,8 @@ from app.schemas.i18n import (
     TranslationResponse,
     TranslationUpsertRequest,
 )
+from app.schemas.app_config import OtpChannelsResponse, OtpChannelsUpdateRequest
+from app.services.app_config_service import AppConfigService
 from app.services.attendance_service import AttendanceService
 from app.services.audit_service import AuditService
 from app.services.i18n_service import I18nService
@@ -796,3 +798,29 @@ async def delete_menu_item(
     _require_admin(admin)
     await I18nService(db).delete_menu(item_id)
     return success({"success": True})
+
+
+# --------------------------------------------------------------------------- #
+# OTP delivery channel (migration 0026) — app-wide config, role='admin'
+# --------------------------------------------------------------------------- #
+@router.get("/otp-channels")
+async def get_otp_channels(
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """The ordered OTP delivery fallback list (WhatsApp/SMS/Email)."""
+    _require_admin(admin)
+    channels = await AppConfigService(db).get_otp_channels()
+    return success(OtpChannelsResponse(channels=channels).model_dump())
+
+
+@router.put("/otp-channels")
+async def update_otp_channels(
+    payload: OtpChannelsUpdateRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Set the ordered OTP delivery fallback list. send-otp tries each in order."""
+    _require_admin(admin)
+    channels = await AppConfigService(db).set_otp_channels(payload.channels)
+    return success(OtpChannelsResponse(channels=channels).model_dump())
