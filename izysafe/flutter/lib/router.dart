@@ -10,6 +10,7 @@ import 'features/alerts/alerts_screen.dart';
 import 'features/chat/chat_screen.dart';
 import 'features/children/child.dart';
 import 'features/children/home_screen.dart';
+import 'features/consent/consent_wizard_screen.dart';
 import 'features/devices/devices_screen.dart';
 import 'features/enrollments/enrollments_screen.dart';
 import 'features/geofences/safe_zones_screen.dart';
@@ -61,6 +62,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/profile', builder: (_, _) => const ProfileEditScreen()),
       GoRoute(path: '/plan', builder: (_, _) => const PlanScreen()),
       GoRoute(path: '/enrollments', builder: (_, _) => const EnrollmentsScreen()),
+      GoRoute(
+        path: '/enrollments/:id/setup',
+        builder: (_, state) =>
+            ConsentWizardScreen(enrollmentId: state.pathParameters['id']!),
+      ),
       GoRoute(
         path: '/child/:id/map',
         builder: (_, state) => LiveMapScreen(

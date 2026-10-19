@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/i18n.dart';
 import 'models.dart';
@@ -125,31 +126,54 @@ class _EnrollmentCardState extends ConsumerState<_EnrollmentCard> {
               ),
             ),
             const SizedBox(height: 4),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              title: Text(t.t('enroll.visibility', 'Let the school see this student')),
-              subtitle: e.parentOptIn
-                  ? null
-                  : Text(t.t('enroll.visibility_hint', 'Turn on to approve the enrollment.'),
-                      style: const TextStyle(fontSize: 12)),
-              value: e.parentOptIn,
-              onChanged: _busy ? null : (v) => _set(parentOptIn: v),
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              title: Text(t.t('enroll.share_location', 'Share live location')),
-              value: e.locationOptIn,
-              onChanged: (_busy || !e.parentOptIn) ? null : (v) => _set(locationOptIn: v),
-            ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              title: Text(t.t('enroll.bus_tracking', 'Bus tracking')),
-              value: e.busOptIn,
-              onChanged: (_busy || !e.parentOptIn) ? null : (v) => _set(busOptIn: v),
-            ),
+            // Pending request → launch the guided consent wizard. Already-approved
+            // enrollments keep the inline toggles for quick management.
+            if (e.pending)
+              Padding(
+                padding: const EdgeInsets.only(right: 8, top: 4, bottom: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      t.t('enroll.setup_prompt',
+                          'Review what this school can see and approve it step by step.'),
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () => context.push('/enrollments/${e.id}/setup'),
+                        icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+                        label: Text(t.t('enroll.setup_cta', 'Review & approve')),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else ...[
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text(t.t('enroll.visibility', 'Let the school see this student')),
+                value: e.parentOptIn,
+                onChanged: _busy ? null : (v) => _set(parentOptIn: v),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text(t.t('enroll.share_location', 'Share live location')),
+                value: e.locationOptIn,
+                onChanged: (_busy || !e.parentOptIn) ? null : (v) => _set(locationOptIn: v),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text(t.t('enroll.bus_tracking', 'Bus tracking')),
+                value: e.busOptIn,
+                onChanged: (_busy || !e.parentOptIn) ? null : (v) => _set(busOptIn: v),
+              ),
+            ],
           ],
         ),
       ),
