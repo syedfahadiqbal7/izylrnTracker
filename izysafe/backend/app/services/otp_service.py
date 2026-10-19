@@ -24,6 +24,8 @@ from app.core.security import (
     verify_secret,
 )
 from app.core.validators import validate_phone
+from app.models.child import Child, FamilyMember
+from app.models.school import StudentEnrollment
 from app.models.user import OtpSession, User
 from app.services.otp_gateway import OtpGateway
 
@@ -90,9 +92,23 @@ class OtpService:
                 400, "OTP_INVALID", f"Incorrect OTP — {remaining} attempts remaining"
             )
 
-        # Correct OTP → consume the session and (find or) create the user.
+        # Correct OTP. Model 1 (school-gated): there is NO self-registration — the
+        # account must already exist (school-provisioned) AND the parent must have at
+        # least one active school enrollment. Transfer/graduation removes the
+        # enrollment, which revokes app access here.
+        user = await self._get_user(phone)
+        if user is None:
+            raise APIException(
+                403, "NO_ACCOUNT",
+                "No account for this number — ask your school to add you first",
+            )
+        if not await self._has_active_enrollment(user.id):
+            raise APIException(
+                403, "NO_ACTIVE_ENROLLMENT",
+                "Your access is managed by your school — no active enrollment found",
+            )
+
         session.verified = True
-        user, is_new = await self._get_or_create_user(phone)
         user.last_login_at = datetime.now(timezone.utc)  # stamp parent login (Sprint 10)
         await self.db.commit()
 
@@ -100,7 +116,7 @@ class OtpService:
             "access_token": create_access_token(str(user.id)),
             "refresh_token": create_refresh_token(str(user.id)),
             "token_type": "bearer",
-            "is_new_user": is_new,
+            "is_new_user": False,
         }
 
     # ---------------------------------------------------------------- helpers
@@ -120,17 +136,26 @@ class OtpService:
         )
         return result.scalar_one_or_none()
 
-    async def _get_or_create_user(self, phone: str) -> tuple[User, bool]:
-        existing = await self.db.execute(
-            select(User).where(User.phone == phone, User.deleted_at.is_(None))
-        )
-        user = existing.scalar_one_or_none()
-        if user is not None:
-            return user, False
-        user = User(phone=phone, country_code="+971" if phone.startswith("+971") else "+91")
-        self.db.add(user)
-        await self.db.flush()  # populate user.id for token subject
-        return user, True
+    async def _get_user(self, phone: str) -> User | None:
+        return (
+            await self.db.execute(
+                select(User).where(User.phone == phone, User.deleted_at.is_(None))
+            )
+        ).scalar_one_or_none()
+
+    async def _has_active_enrollment(self, user_id) -> bool:
+        """True when the parent has ≥1 child enrolled at any school (Model 1 gate).
+        Enrollment removal is a hard delete, so an existing row = active access."""
+        row = (
+            await self.db.execute(
+                select(StudentEnrollment.id)
+                .join(FamilyMember, FamilyMember.child_id == StudentEnrollment.child_id)
+                .join(Child, Child.id == StudentEnrollment.child_id)
+                .where(FamilyMember.user_id == user_id, Child.deleted_at.is_(None))
+                .limit(1)
+            )
+        ).first()
+        return row is not None
 
     def _generate_otp(self) -> str:
         return str(secrets.randbelow(10 ** settings.otp_length)).zfill(settings.otp_length)
