@@ -97,6 +97,41 @@ class SubscriptionInfo {
       );
 }
 
+/// A sellable plan from the catalog (GET /subscriptions/plans).
+class Plan {
+  final String tier;
+  final String name;
+  final String currency; // INR | AED
+  final int? price; // monthly, major units; null = custom (contact sales)
+  final bool purchasable;
+  final List<String> features;
+
+  const Plan({
+    required this.tier,
+    required this.name,
+    required this.currency,
+    required this.price,
+    required this.purchasable,
+    required this.features,
+  });
+
+  factory Plan.fromJson(Map<String, dynamic> j) => Plan(
+        tier: j['tier'] as String,
+        name: j['name'] as String,
+        currency: (j['currency'] ?? 'INR') as String,
+        price: (j['price'] as num?)?.toInt(),
+        purchasable: (j['purchasable'] ?? false) as bool,
+        features: ((j['features'] ?? []) as List).map((e) => e as String).toList(),
+      );
+
+  String get symbol => currency == 'AED' ? 'AED ' : '₹';
+  String get priceLabel => price == null
+      ? ''
+      : price == 0
+          ? ''
+          : '$symbol$price';
+}
+
 /// A Premium emergency contact (per child).
 class EmergencyContact {
   final String id;

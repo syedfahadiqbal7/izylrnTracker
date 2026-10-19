@@ -462,11 +462,7 @@ class _PlanCard extends ConsumerWidget {
                   ),
                 ),
                 TextButton(
-                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                        content: Text(
-                            t.t('settings.coming_soon', 'Plan management is coming soon.'))),
-                  ),
+                  onPressed: () => context.push('/plan'),
                   child: Text(t.t('settings.manage_plan', 'Manage')),
                 ),
               ],
