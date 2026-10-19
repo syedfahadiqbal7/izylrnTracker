@@ -7,6 +7,7 @@ import '../../core/i18n.dart';
 import '../../core/theme.dart';
 import '../auth/auth_controller.dart';
 import '../children/children_providers.dart';
+import '../enrollments/providers.dart';
 import 'models.dart';
 import 'providers.dart';
 
@@ -40,6 +41,9 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             _SectionLabel(t.t('settings.family', 'Family & children')),
             const _FamilyCard(),
+            const SizedBox(height: 16),
+            _SectionLabel(t.t('enroll.title', 'School requests')),
+            const _SchoolRequestsCard(),
             const SizedBox(height: 16),
             _SectionLabel(t.t('settings.notifications', 'Notifications')),
             _NotificationsCard(profile: p),
@@ -413,6 +417,52 @@ class _EmergencyCard extends ConsumerWidget {
 }
 
 // --------------------------------------------------------------------------- plan
+class _SchoolRequestsCard extends ConsumerWidget {
+  const _SchoolRequestsCard();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(translatorProvider);
+    final pending = ref.watch(pendingEnrollmentsCountProvider);
+    return _Panel(
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: Container(
+          height: 46,
+          width: 46,
+          decoration: BoxDecoration(
+            gradient: Brand.gradient,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Icon(Icons.school, color: Colors.white),
+        ),
+        title: Text(t.t('enroll.title', 'School requests'),
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(
+          pending > 0
+              ? '$pending ${t.t('enroll.pending_count', 'pending approval')}'
+              : t.t('enroll.manage_hint', 'Manage school visibility & consent'),
+          style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+        ),
+        trailing: pending > 0
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE11D48),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('$pending',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12)),
+              )
+            : const Icon(Icons.chevron_right, color: Colors.grey),
+        onTap: () => context.push('/enrollments'),
+      ),
+    );
+  }
+}
+
 class _PlanCard extends ConsumerWidget {
   const _PlanCard();
   @override

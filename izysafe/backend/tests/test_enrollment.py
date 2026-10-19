@@ -299,6 +299,21 @@ async def test_parent_lists_enrollments(client, db_session):
     assert len(data) == 1
     assert data[0]["school_name"] == "Sunrise School"
     assert data[0]["parent_opt_in"] is False
+    assert data[0]["location_opt_in"] is False
+
+
+async def test_parent_list_reflects_location_consent(client, db_session):
+    """GET /enrollments surfaces location_opt_in so the consent screen can show it."""
+    _, _, admin_hdr = await _school_admin(db_session, name="Nova School")
+    _, _, parent_hdr = await _parent_with_children(db_session, phone="+919863333331")
+    await _enroll(client, admin_hdr, "+919863333331")
+    eid = (await client.get(ENROLLMENTS, headers=parent_hdr)).json()["data"][0]["id"]
+
+    await client.put(f"{ENROLLMENTS}/{eid}", headers=parent_hdr,
+                     json={"parent_opt_in": True, "location_opt_in": True})
+    row = (await client.get(ENROLLMENTS, headers=parent_hdr)).json()["data"][0]
+    assert row["parent_opt_in"] is True
+    assert row["location_opt_in"] is True
 
 
 async def test_parent_approves_and_withdraws(client, db_session):
