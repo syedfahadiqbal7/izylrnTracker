@@ -13,6 +13,7 @@ import 'features/children/home_screen.dart';
 import 'features/devices/devices_screen.dart';
 import 'features/geofences/safe_zones_screen.dart';
 import 'features/share/share_links_screen.dart';
+import 'features/settings/profile_edit_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/tracking/live_map_screen.dart';
 
@@ -55,6 +56,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
       GoRoute(path: '/alerts', builder: (_, _) => const AlertsScreen()),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
+      GoRoute(path: '/profile', builder: (_, _) => const ProfileEditScreen()),
       GoRoute(
         path: '/child/:id/map',
         builder: (_, state) => LiveMapScreen(

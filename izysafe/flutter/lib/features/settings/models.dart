@@ -1,4 +1,15 @@
 /// The parent's profile + notification prefs (GET /auth/me).
+class Contact {
+  final String label;
+  final String phone;
+  const Contact({required this.label, required this.phone});
+
+  factory Contact.fromJson(Map<String, dynamic> j) =>
+      Contact(label: (j['label'] ?? '') as String, phone: (j['phone'] ?? '') as String);
+
+  Map<String, String> toJson() => {'label': label, 'phone': phone};
+}
+
 class ProfileSettings {
   final String id;
   final String phone;
@@ -9,6 +20,10 @@ class ProfileSettings {
   final String tier;
   final String? quietFrom; // "HH:MM" or null
   final String? quietTo;
+  final String? address;
+  final double? homeLat;
+  final double? homeLng;
+  final List<Contact> additionalContacts;
 
   const ProfileSettings({
     required this.id,
@@ -20,6 +35,10 @@ class ProfileSettings {
     required this.tier,
     required this.quietFrom,
     required this.quietTo,
+    this.address,
+    this.homeLat,
+    this.homeLng,
+    this.additionalContacts = const [],
   });
 
   bool get quietHoursOn => quietFrom != null && quietTo != null;
@@ -34,6 +53,12 @@ class ProfileSettings {
         tier: (j['subscription_tier'] ?? 'free') as String,
         quietFrom: _hhmm(j['quiet_hours_from']),
         quietTo: _hhmm(j['quiet_hours_to']),
+        address: j['address'] as String?,
+        homeLat: (j['home_lat'] as num?)?.toDouble(),
+        homeLng: (j['home_lng'] as num?)?.toDouble(),
+        additionalContacts: ((j['additional_contacts'] ?? []) as List)
+            .map((e) => Contact.fromJson(e as Map<String, dynamic>))
+            .toList(growable: false),
       );
 
   String get displayName =>

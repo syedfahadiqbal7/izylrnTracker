@@ -69,6 +69,11 @@ CREATE TABLE users (
     -- Notification preferences (User Journey: quiet hours suppress non-SOS alerts)
     quiet_hours_from        TIME,
     quiet_hours_to          TIME,
+    -- Parent contact profile (profile setup): home address + map pin + extra numbers
+    address                 TEXT,
+    home_lat                DOUBLE PRECISION,
+    home_lng                DOUBLE PRECISION,
+    additional_contacts     JSONB NOT NULL DEFAULT '[]'::jsonb,  -- [{label, phone}]
     created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at              TIMESTAMPTZ                          -- soft delete

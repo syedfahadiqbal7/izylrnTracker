@@ -95,3 +95,46 @@ async def test_fcm_requires_auth(client):
     resp = await client.put(FCM, json={"fcm_token": "x"})
     assert resp.status_code == 401
     assert resp.json()["code"] == "TOKEN_MISSING"
+
+
+# --------------------------------------------------------------------------- #
+# Contact profile (address + map pin + additional numbers)
+# --------------------------------------------------------------------------- #
+async def test_update_contact_profile(client, auth_headers, user, db_session):
+    resp = await client.put(
+        ME,
+        headers=auth_headers,
+        json={
+            "address": "Business Bay, Dubai",
+            "home_lat": 25.1865,
+            "home_lng": 55.2769,
+            "additional_contacts": [
+                {"label": "Dad", "phone": "+971500000001"},
+                {"label": "Home", "phone": "+97143000000"},
+            ],
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()["data"]
+    assert data["address"] == "Business Bay, Dubai"
+    assert data["home_lat"] == 25.1865
+    assert data["home_lng"] == 55.2769
+    assert [c["label"] for c in data["additional_contacts"]] == ["Dad", "Home"]
+
+    await db_session.refresh(user)
+    assert user.home_lat == 25.1865
+    assert len(user.additional_contacts) == 2
+
+
+async def test_contact_profile_rejects_bad_coords(client, auth_headers):
+    resp = await client.put(ME, headers=auth_headers, json={"home_lat": 200})
+    assert resp.status_code == 422
+
+
+async def test_contact_profile_rejects_too_many_contacts(client, auth_headers):
+    resp = await client.put(
+        ME,
+        headers=auth_headers,
+        json={"additional_contacts": [{"label": f"c{i}", "phone": "+9715000000"} for i in range(11)]},
+    )
+    assert resp.status_code == 422

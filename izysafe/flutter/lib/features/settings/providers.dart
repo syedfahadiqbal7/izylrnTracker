@@ -60,6 +60,26 @@ class SettingsActions {
     return _update(body);
   }
 
+  /// Save the full contact profile from the Profile edit screen. Sends every field
+  /// explicitly (nulls clear them). `additionalContacts` is a list of {label, phone}.
+  Future<void> saveProfile({
+    required String? name,
+    required String? email,
+    required String? address,
+    required double? homeLat,
+    required double? homeLng,
+    required List<Map<String, String>> additionalContacts,
+  }) {
+    return _update({
+      'name': name,
+      'email': email,
+      'address': address,
+      'home_lat': homeLat,
+      'home_lng': homeLng,
+      'additional_contacts': additionalContacts,
+    });
+  }
+
   /// Sync the app language to the backend (so pushes/emails localize too). Local
   /// persistence + RTL is handled by the i18n LocaleController separately.
   Future<void> setLanguage(String code) => _update({'language': code});

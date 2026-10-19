@@ -148,55 +148,13 @@ class _ProfileCard extends ConsumerWidget {
               ),
             ),
             OutlinedButton(
-              onPressed: () => _editProfile(context, ref, profile),
+              onPressed: () => context.push('/profile'),
               child: Text(t.t('common.edit', 'Edit')),
             ),
           ],
         ),
       ),
     );
-  }
-
-  Future<void> _editProfile(
-      BuildContext context, WidgetRef ref, ProfileSettings p) async {
-    final t = ref.read(translatorProvider);
-    final nameCtl = TextEditingController(text: p.name ?? '');
-    final emailCtl = TextEditingController(text: p.email ?? '');
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(t.t('settings.edit_profile', 'Edit profile')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-                controller: nameCtl,
-                decoration: InputDecoration(
-                    labelText: t.t('settings.name', 'Name'))),
-            const SizedBox(height: 12),
-            TextField(
-                controller: emailCtl,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                    labelText: t.t('settings.email', 'Email'))),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(t.t('common.cancel', 'Cancel'))),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(t.t('common.save', 'Save'))),
-        ],
-      ),
-    );
-    if (saved == true) {
-      await ref.read(settingsActionsProvider).updateProfile(
-            name: nameCtl.text.trim().isEmpty ? null : nameCtl.text.trim(),
-            email: emailCtl.text.trim().isEmpty ? null : emailCtl.text.trim(),
-          );
-    }
   }
 }
 
