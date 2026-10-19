@@ -29,6 +29,7 @@ from app.core import redis_keys as rk
 from app.core.errors import APIException
 from app.models.child import Child, FamilyMember
 from app.models.device import Device
+from app.models.school import StudentEnrollment
 from app.models.user import User
 from app.services.children_service import effective_tier
 from app.services.traccar_gateway import TraccarGateway
@@ -111,6 +112,76 @@ class DeviceService:
         device.deleted_at = datetime.now(timezone.utc)
         device.active = False
         await self.db.commit()
+
+    # ------------------------------------------------------- school-side (admin)
+    # A school admin can equip a student enrolled at THEIR school with a device.
+    # Authorization is by enrollment (not family membership), and — by product
+    # decision — there is NO per-child device tier limit for school-added devices
+    # (the school provisions its own trackers). IMEI uniqueness + Traccar
+    # registration (graceful seam) still apply.
+    async def add_device_for_school(
+        self, school_id: uuid.UUID, child_id: uuid.UUID, data: dict[str, Any]
+    ) -> tuple[Device, bool]:
+        await self._require_enrolled(school_id, child_id)
+        await self._ensure_imei_free(data["imei"])
+        traccar_id = await self.traccar.create_device(data["imei"], data["name"])
+        device = Device(child_id=child_id, traccar_id=traccar_id, **data)
+        self.db.add(device)
+        await self.db.commit()
+        await self.db.refresh(device)
+        return device, await self._is_online(device)
+
+    async def list_devices_for_school(
+        self, school_id: uuid.UUID, child_id: uuid.UUID
+    ) -> list[tuple[Device, bool]]:
+        await self._require_enrolled(school_id, child_id)
+        rows = (
+            await self.db.execute(
+                select(Device)
+                .where(Device.child_id == child_id, Device.deleted_at.is_(None))
+                .order_by(Device.created_at)
+            )
+        ).scalars().all()
+        return [(d, await self._is_online(d)) for d in rows]
+
+    async def delete_device_for_school(
+        self, school_id: uuid.UUID, device_id: uuid.UUID
+    ) -> None:
+        """Unpair a device the school added: soft-delete + remove from Traccar. Only
+        allowed for a device whose child is enrolled at the admin's school."""
+        device = (
+            await self.db.execute(
+                select(Device).where(Device.id == device_id, Device.deleted_at.is_(None))
+            )
+        ).scalar_one_or_none()
+        if device is None or device.child_id is None:
+            raise APIException(404, "DEVICE_NOT_FOUND", "Device not found")
+        await self._require_enrolled(school_id, device.child_id)
+        if device.traccar_id is not None:
+            await self.traccar.delete_device(device.traccar_id)
+        device.deleted_at = datetime.now(timezone.utc)
+        device.active = False
+        await self.db.commit()
+
+    async def _require_enrolled(
+        self, school_id: uuid.UUID, child_id: uuid.UUID
+    ) -> StudentEnrollment:
+        """The child must be enrolled at this school (any consent state). 404 otherwise —
+        never reveal a child that isn't the school's."""
+        row = (
+            await self.db.execute(
+                select(StudentEnrollment)
+                .join(Child, Child.id == StudentEnrollment.child_id)
+                .where(
+                    StudentEnrollment.school_id == school_id,
+                    StudentEnrollment.child_id == child_id,
+                    Child.deleted_at.is_(None),
+                )
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            raise APIException(404, "CHILD_NOT_FOUND", "Student not enrolled at your school")
+        return row
 
     # ---------------------------------------------------------------- helpers
     async def _is_online(self, device: Device) -> bool:

@@ -63,9 +63,18 @@ class UserResponse(BaseModel):
     subscription_expires_at: datetime | None = None
     quiet_hours_from: time | None = None
     quiet_hours_to: time | None = None
+    address: str | None = None
+    home_lat: float | None = None
+    home_lng: float | None = None
+    additional_contacts: list[dict] = []
 
 
 # ---- PUT /auth/me (partial profile update) ----
+class ContactItem(BaseModel):
+    label: str = Field(..., min_length=1, max_length=40)   # e.g. "Home", "Dad", "Nanny"
+    phone: str = Field(..., min_length=3, max_length=20)
+
+
 class ProfileUpdateRequest(BaseModel):
     name: str | None = Field(None, min_length=2, max_length=100)
     email: str | None = None
@@ -74,6 +83,11 @@ class ProfileUpdateRequest(BaseModel):
     timezone: str | None = Field(None, max_length=64)
     quiet_hours_from: time | None = None
     quiet_hours_to: time | None = None
+    # Contact profile (profile setup)
+    address: str | None = Field(None, max_length=500)
+    home_lat: float | None = Field(None, ge=-90, le=90)
+    home_lng: float | None = Field(None, ge=-180, le=180)
+    additional_contacts: list[ContactItem] | None = Field(None, max_length=10)
 
 
 # ---- PUT /auth/me/fcm-token ----

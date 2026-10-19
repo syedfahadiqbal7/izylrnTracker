@@ -15,6 +15,7 @@ import {
   Settings,
   Truck,
   Users,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -24,6 +25,7 @@ const ICONS: Record<string, LucideIcon> = {
   ClipboardCheck,
   FileBarChart,
   Users,
+  UsersRound,
   Route,
   Truck,
   ScrollText,

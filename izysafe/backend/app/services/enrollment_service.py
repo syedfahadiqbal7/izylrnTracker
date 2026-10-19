@@ -19,7 +19,7 @@ import logging
 import uuid
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import APIException
@@ -40,9 +40,11 @@ class EnrollmentService:
 
     # ------------------------------------------------------------ school side
     async def enroll(self, admin: SchoolAdmin, data: dict[str, Any]) -> tuple[StudentEnrollment, Child]:
-        """Enroll a student by the parent's phone (school resolves the exact child)."""
+        """Enroll a student by the parent's phone. Model 1 (school-gated): the school
+        PROVISIONS the parent + child — if either doesn't exist yet, they are created
+        here (the parent later signs in by OTP to that account)."""
         phone = validate_phone(data["phone"])
-        child = await self._resolve_child(phone, data.get("child_name"))
+        child = await self._resolve_or_create_child(phone, data.get("child_name"))
 
         existing = (
             await self.db.execute(
@@ -215,17 +217,152 @@ class EnrollmentService:
         )
         return enrollment
 
+    # ------------------------------------------------- parents (Model 1 admin)
+    async def list_parents(
+        self, admin: SchoolAdmin, *, q: str | None, limit: int, offset: int
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Parents (primary guardians) of students enrolled at the admin's school,
+        with the children they have AT THIS SCHOOL. Model 1 scoping: a school only
+        sees parents of its own enrolled students."""
+        base = (
+            select(User.id, User.name, User.phone, User.last_login_at)
+            .join(FamilyMember, FamilyMember.user_id == User.id)
+            .join(Child, Child.id == FamilyMember.child_id)
+            .join(StudentEnrollment, StudentEnrollment.child_id == Child.id)
+            .where(
+                StudentEnrollment.school_id == admin.school_id,
+                FamilyMember.is_primary.is_(True),
+                Child.deleted_at.is_(None),
+                User.deleted_at.is_(None),
+            )
+            .distinct()
+        )
+        if q:
+            like = f"%{q.strip().lower()}%"
+            base = base.where(
+                or_(func.lower(func.coalesce(User.name, "")).like(like), User.phone.like(like))
+            )
+        total = (
+            await self.db.execute(select(func.count()).select_from(base.subquery()))
+        ).scalar_one()
+        rows = (
+            await self.db.execute(
+                base.order_by(User.name.nulls_last(), User.phone).limit(limit).offset(offset)
+            )
+        ).all()
+        parents: list[dict[str, Any]] = [
+            {"id": r.id, "name": r.name, "phone": r.phone,
+             "last_login_at": r.last_login_at, "children": []}
+            for r in rows
+        ]
+        if parents:
+            by_id = {p["id"]: p for p in parents}
+            crows = (
+                await self.db.execute(
+                    select(
+                        User.id, Child.name, StudentEnrollment.class_grade,
+                        StudentEnrollment.parent_opt_in, StudentEnrollment.location_opt_in,
+                    )
+                    .join(FamilyMember, FamilyMember.user_id == User.id)
+                    .join(Child, Child.id == FamilyMember.child_id)
+                    .join(StudentEnrollment, StudentEnrollment.child_id == Child.id)
+                    .where(
+                        StudentEnrollment.school_id == admin.school_id,
+                        FamilyMember.is_primary.is_(True),
+                        Child.deleted_at.is_(None),
+                        User.id.in_(list(by_id.keys())),
+                    )
+                    .order_by(Child.name)
+                )
+            ).all()
+            for cr in crows:
+                by_id[cr.id]["children"].append({
+                    "name": cr.name, "class_grade": cr.class_grade,
+                    "parent_opt_in": cr.parent_opt_in, "location_opt_in": cr.location_opt_in,
+                })
+        return parents, total
+
+    async def update_parent(
+        self, admin: SchoolAdmin, user_id: uuid.UUID, name: str | None
+    ) -> User:
+        parent = await self._require_parent_at_school(admin, user_id)
+        parent.name = (name or "").strip() or None
+        AuditService.log(self.db, action="parent.update", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="user", entity_id=parent.id,
+                         details={"name": parent.name})
+        await self.db.commit()
+        await self.db.refresh(parent)
+        return parent
+
+    async def remove_parent(self, admin: SchoolAdmin, user_id: uuid.UUID) -> None:
+        """Remove a parent from this school: delete the school's enrollments for all
+        their (primary) children. Model 1 — this revokes the parent's app access once
+        they have no active enrollment anywhere. The account + history are retained."""
+        await self._require_parent_at_school(admin, user_id)
+        enrollments = (
+            await self.db.execute(
+                select(StudentEnrollment)
+                .join(Child, Child.id == StudentEnrollment.child_id)
+                .join(FamilyMember, FamilyMember.child_id == Child.id)
+                .where(
+                    StudentEnrollment.school_id == admin.school_id,
+                    FamilyMember.user_id == user_id,
+                    FamilyMember.is_primary.is_(True),
+                )
+            )
+        ).scalars().all()
+        for e in enrollments:
+            await self.db.delete(e)
+        AuditService.log(self.db, action="parent.remove", actor_type="school_admin",
+                         actor_id=admin.id, school_id=admin.school_id,
+                         entity_type="user", entity_id=user_id,
+                         details={"removed_enrollments": len(enrollments)})
+        await self.db.commit()
+
+    async def _require_parent_at_school(self, admin: SchoolAdmin, user_id: uuid.UUID) -> User:
+        parent = (
+            await self.db.execute(
+                select(User)
+                .join(FamilyMember, FamilyMember.user_id == User.id)
+                .join(Child, Child.id == FamilyMember.child_id)
+                .join(StudentEnrollment, StudentEnrollment.child_id == Child.id)
+                .where(
+                    User.id == user_id,
+                    StudentEnrollment.school_id == admin.school_id,
+                    FamilyMember.is_primary.is_(True),
+                    User.deleted_at.is_(None),
+                )
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        if parent is None:
+            raise APIException(404, "PARENT_NOT_FOUND", "No such parent at your school")
+        return parent
+
     # ---------------------------------------------------------------- helpers
-    async def _resolve_child(self, phone: str, child_name: str | None) -> Child:
+    async def _resolve_or_create_child(self, phone: str, child_name: str | None) -> Child:
+        """Model 1 (school-gated) onboarding: find the parent + child, or CREATE them.
+
+        - Parent not found → create a parent User for this phone (they'll sign in by OTP).
+        - A matching primary-parent child exists → reuse it.
+        - No matching child → create one (the school is provisioning this student); the
+          student's name is then required.
+        """
         parent = (
             await self.db.execute(
                 select(User).where(User.phone == phone, User.deleted_at.is_(None))
             )
         ).scalar_one_or_none()
         if parent is None:
-            raise APIException(
-                404, "PARENT_NOT_FOUND", "No parent account for this number — ask them to install the app first"
+            parent = User(
+                phone=phone,
+                country_code="+971" if phone.startswith("+971") else "+91",
             )
+            self.db.add(parent)
+            await self.db.flush()
+            logger.info("Provisioned new parent account for %s (school-driven)", phone)
+
         stmt = (
             select(Child)
             .join(FamilyMember, FamilyMember.child_id == Child.id)
@@ -239,11 +376,26 @@ class EnrollmentService:
             stmt = stmt.where(func.lower(Child.name) == child_name.strip().lower())
         children = (await self.db.execute(stmt)).scalars().all()
 
-        if not children:
-            raise APIException(404, "CHILD_NOT_FOUND", "No matching student for this parent")
+        if len(children) == 1:
+            return children[0]
         if len(children) > 1:
             raise APIException(409, "AMBIGUOUS_CHILD", "Provide the student's name — this parent has multiple children")
-        return children[0]
+
+        # No matching child → provision one. A name is required to create it.
+        if not child_name or not child_name.strip():
+            raise APIException(400, "CHILD_NAME_REQUIRED", "Enter the student's name to enroll them")
+        child = Child(name=child_name.strip())
+        self.db.add(child)
+        await self.db.flush()
+        self.db.add(
+            FamilyMember(
+                child_id=child.id, user_id=parent.id, role="parent",
+                is_primary=True, can_view=True, can_call=True, can_manage=True,
+            )
+        )
+        await self.db.flush()
+        logger.info("Provisioned child %s for parent %s (school-driven)", child.id, phone)
+        return child
 
     async def _require_own(self, admin: SchoolAdmin, enrollment_id: uuid.UUID) -> StudentEnrollment:
         enrollment = (

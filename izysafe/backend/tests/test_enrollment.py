@@ -92,20 +92,47 @@ async def test_enroll_with_name_disambiguates(client, db_session):
     assert resp.json()["data"]["child_id"] == str(children[1].id)
 
 
-async def test_enroll_parent_not_found(client, db_session):
+def _fresh_phone() -> str:
+    # A valid, unique +91 number (starts 9) that won't collide with seed/live data.
+    return "+9199" + f"{uuid.uuid4().int % 100000000:08d}"
+
+
+async def test_enroll_provisions_new_parent_and_child(client, db_session):
+    """Model 1 (school-gated): enrolling an unknown phone with a name CREATES the
+    parent account + child, rather than failing with PARENT_NOT_FOUND."""
     _, _, admin_hdr = await _school_admin(db_session)
-    resp = await client.post(STUDENTS, headers=admin_hdr, json={"phone": "+919800000000"})
-    assert resp.status_code == 404
-    assert resp.json()["code"] == "PARENT_NOT_FOUND"
+    phone = _fresh_phone()
+    resp = await client.post(STUDENTS, headers=admin_hdr,
+                             json={"phone": phone, "child_name": "Zoya"})
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["data"]["child_name"] == "Zoya"
+    parent = (
+        await db_session.execute(select(User).where(User.phone == phone))
+    ).scalar_one()
+    child = (
+        await db_session.execute(
+            select(Child).join(FamilyMember, FamilyMember.child_id == Child.id)
+            .where(FamilyMember.user_id == parent.id, FamilyMember.is_primary.is_(True))
+        )
+    ).scalar_one()
+    assert child.name == "Zoya"
 
 
-async def test_enroll_child_name_no_match(client, db_session):
+async def test_enroll_new_parent_without_name_requires_name(client, db_session):
+    _, _, admin_hdr = await _school_admin(db_session)
+    resp = await client.post(STUDENTS, headers=admin_hdr, json={"phone": _fresh_phone()})
+    assert resp.status_code == 400
+    assert resp.json()["code"] == "CHILD_NAME_REQUIRED"
+
+
+async def test_enroll_existing_parent_new_child_name_creates_child(client, db_session):
+    """An existing parent + a new student name → provision a new child (not 404)."""
     _, _, admin_hdr = await _school_admin(db_session)
     await _parent_with_children(db_session, phone="+919833333333", names=("Aryan",))
     resp = await client.post(STUDENTS, headers=admin_hdr,
                              json={"phone": "+919833333333", "child_name": "Nobody"})
-    assert resp.status_code == 404
-    assert resp.json()["code"] == "CHILD_NOT_FOUND"
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["data"]["child_name"] == "Nobody"
 
 
 async def test_enroll_duplicate(client, db_session):
@@ -272,6 +299,21 @@ async def test_parent_lists_enrollments(client, db_session):
     assert len(data) == 1
     assert data[0]["school_name"] == "Sunrise School"
     assert data[0]["parent_opt_in"] is False
+    assert data[0]["location_opt_in"] is False
+
+
+async def test_parent_list_reflects_location_consent(client, db_session):
+    """GET /enrollments surfaces location_opt_in so the consent screen can show it."""
+    _, _, admin_hdr = await _school_admin(db_session, name="Nova School")
+    _, _, parent_hdr = await _parent_with_children(db_session, phone="+919863333331")
+    await _enroll(client, admin_hdr, "+919863333331")
+    eid = (await client.get(ENROLLMENTS, headers=parent_hdr)).json()["data"][0]["id"]
+
+    await client.put(f"{ENROLLMENTS}/{eid}", headers=parent_hdr,
+                     json={"parent_opt_in": True, "location_opt_in": True})
+    row = (await client.get(ENROLLMENTS, headers=parent_hdr)).json()["data"][0]
+    assert row["parent_opt_in"] is True
+    assert row["location_opt_in"] is True
 
 
 async def test_parent_approves_and_withdraws(client, db_session):

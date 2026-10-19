@@ -9,6 +9,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Smartphone,
   Trash2,
   UserPlus,
 } from "lucide-react";
@@ -54,9 +55,12 @@ import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { ApiClientError } from "@/types/api";
 import { useClassGrades } from "@/features/attendance/api";
 import {
+  useAddStudentDevice,
   useEnrollStudent,
   useRemoveEnrollment,
+  useRemoveStudentDevice,
   useRoster,
+  useStudentDevices,
   useUpdateEnrollment,
   type Enrollment,
 } from "@/features/roster/api";
@@ -77,6 +81,7 @@ export function RosterPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editFor, setEditFor] = useState<Enrollment | null>(null);
   const [removeFor, setRemoveFor] = useState<Enrollment | null>(null);
+  const [devicesFor, setDevicesFor] = useState<Enrollment | null>(null);
 
   // Any filter change resets to the first page.
   useEffect(() => setPage(0), [q, classGrade, consent]);
@@ -267,6 +272,10 @@ export function RosterPage() {
                                 <Pencil className="size-4" />
                                 {t("roster.edit_class", "Edit class / grade")}
                               </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => setDevicesFor(r)}>
+                                <Smartphone className="size-4" />
+                                {t("roster.manage_devices", "Devices")}
+                              </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 variant="destructive"
@@ -317,6 +326,10 @@ export function RosterPage() {
       <RemoveStudentDialog
         enrollment={removeFor}
         onClose={() => setRemoveFor(null)}
+      />
+      <ManageDevicesDialog
+        enrollment={devicesFor}
+        onClose={() => setDevicesFor(null)}
       />
     </>
   );
@@ -580,6 +593,157 @@ function RemoveStudentDialog({
           >
             {remove.isPending && <Loader2 className="size-4 animate-spin" />}
             {t("roster.remove", "Remove")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ManageDevicesDialog({
+  enrollment,
+  onClose,
+}: {
+  enrollment: Enrollment | null;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const childId = enrollment?.child_id ?? "";
+  const devices = useStudentDevices(enrollment ? childId : null);
+  const add = useAddStudentDevice(childId);
+  const remove = useRemoveStudentDevice(childId);
+  const [name, setName] = useState("");
+  const [imei, setImei] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [seededFor, setSeededFor] = useState<string | null>(null);
+  if (enrollment && seededFor !== enrollment.id) {
+    setSeededFor(enrollment.id);
+    setName("");
+    setImei("");
+    setError(null);
+    add.reset();
+  }
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      await add.mutateAsync({ name: name.trim(), imei: imei.trim() });
+      setName("");
+      setImei("");
+    } catch (err) {
+      setError(
+        err instanceof ApiClientError
+          ? err.message
+          : t("roster.device_add_error", "Could not add the device."),
+      );
+    }
+  };
+
+  const items = devices.data?.items ?? [];
+
+  return (
+    <Dialog open={enrollment !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>
+            {t("roster.devices_title", "Devices")}
+            {enrollment ? ` — ${enrollment.child_name}` : ""}
+          </DialogTitle>
+          <DialogDescription>
+            {t("roster.devices_desc", "Trackers the school has provisioned for this student. They appear on Live Tracking once the parent has granted location consent.")}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {devices.isLoading ? (
+            <Skeleton className="h-10 w-full" />
+          ) : items.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              {t("roster.no_devices", "No devices yet.")}
+            </p>
+          ) : (
+            <ul className="divide-y rounded-md border">
+              {items.map((d) => (
+                <li
+                  key={d.id}
+                  className="flex items-center justify-between gap-3 px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 font-medium">
+                      <Smartphone className="size-4 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{d.name}</span>
+                      {d.is_online ? (
+                        <Badge variant="success">{t("roster.online", "Online")}</Badge>
+                      ) : (
+                        <Badge variant="secondary">{t("roster.offline", "Offline")}</Badge>
+                      )}
+                    </div>
+                    <p className="truncate text-xs tabular-nums text-muted-foreground">
+                      IMEI {d.imei}
+                      {d.last_battery != null ? ` · ${d.last_battery}%` : ""}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    disabled={remove.isPending}
+                    onClick={() => remove.mutate(d.id)}
+                    aria-label={t("roster.remove_device", "Remove device")}
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <form
+            onSubmit={submit}
+            className="space-y-3 rounded-md border bg-muted/30 p-3"
+          >
+            <p className="text-sm font-medium">
+              {t("roster.pair_device", "Pair a device")}
+            </p>
+            <div className="space-y-2">
+              <Label htmlFor="d-name">{t("roster.device_name", "Device name")}</Label>
+              <Input
+                id="d-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t("roster.eg_tag", "e.g. School bag tracker")}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="d-imei">{t("roster.device_imei", "IMEI")}</Label>
+              <Input
+                id="d-imei"
+                value={imei}
+                onChange={(e) => setImei(e.target.value)}
+                placeholder={t("roster.imei_hint", "From the tracker / its QR code")}
+              />
+            </div>
+            {error && (
+              <p className="text-sm font-medium text-destructive">{error}</p>
+            )}
+            <Button
+              type="submit"
+              size="sm"
+              disabled={add.isPending || !name.trim() || !imei.trim()}
+            >
+              {add.isPending ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Plus className="size-4" />
+              )}
+              {t("roster.add_device", "Add device")}
+            </Button>
+          </form>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            {t("common.close", "Close")}
           </Button>
         </DialogFooter>
       </DialogContent>

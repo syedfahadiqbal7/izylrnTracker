@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/i18n.dart';
 import 'core/push.dart';
 import 'core/theme.dart';
+import 'features/sos/sos_gate.dart';
 import 'router.dart';
 
 void main() {
@@ -34,9 +35,12 @@ class _IzySafeParentAppState extends ConsumerState<IzySafeParentApp> {
       debugShowCheckedModeBanner: false,
       theme: buildTheme(),
       routerConfig: router,
-      // Flip the whole app to RTL for Arabic.
-      builder: (context, child) =>
-          Directionality(textDirection: direction, child: child!),
+      // Flip the whole app to RTL for Arabic, and mount the app-wide SOS gate so
+      // an active SOS pops over any screen (poll-based; works without FCM/Firebase).
+      builder: (context, child) => Directionality(
+        textDirection: direction,
+        child: SosGate(child: child!),
+      ),
     );
   }
 }

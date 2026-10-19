@@ -68,6 +68,7 @@ services:
       - "5023:5023"   # GT06   (primary)
       - "5002:5002"   # TK103
       - "5013:5013"   # H02
+      - "5055:5055"   # OsmAnd (Traccar Client phone app — use a phone as a test tracker)
     volumes:
       - ./traccar/traccar.xml:/opt/traccar/conf/traccar.xml:ro
       - ./data/traccar/logs:/opt/traccar/logs
@@ -131,6 +132,33 @@ services:
     volumes: ["./backend:/app", "./backend/secrets:/app/secrets:ro"]
     networks: [izysafe]
 
+  # --------------------------------------------------------------------------
+  # School Admin web panel — Vite dev server (hot-reload). Dev convenience so the
+  # panel comes up with the stack. Prod serves the built bundle via nginx
+  # (see docker-compose.prod.yml `web`). The browser runs on the host, so the API
+  # base in web-admin/.env stays http://localhost:8000/api/v1 (not the compose host).
+  # node_modules lives in a named volume so the container builds Linux-native
+  # binaries (esbuild/rollup) instead of inheriting the host's.
+  # --------------------------------------------------------------------------
+  web-admin:
+    image: node:20-alpine
+    container_name: izysafe-web-admin
+    restart: unless-stopped
+    working_dir: /app
+    command: sh -c "npm install && npm run dev"
+    environment:
+      # Bind-mount file events don't reach the container on Windows/macOS, so make
+      # Vite's watcher poll — otherwise edits never hot-reload (stale code served).
+      CHOKIDAR_USEPOLLING: "true"
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./web-admin:/app
+      - web_admin_node_modules:/app/node_modules
+    depends_on:
+      - backend
+    networks: [izysafe]
+
   # --- Adminer (optional DB UI) ---
   # adminer:
   #   image: adminer:latest
@@ -138,6 +166,9 @@ services:
   #   ports: ["8081:8080"]
   #   depends_on: [postgres]
   #   networks: [izysafe]
+
+volumes:
+  web_admin_node_modules:
 
 networks:
   izysafe:

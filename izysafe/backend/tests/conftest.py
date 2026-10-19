@@ -10,10 +10,15 @@ Isolation strategy:
 """
 from __future__ import annotations
 
+import os
+import subprocess
+from pathlib import Path
+
 import fakeredis.aioredis
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -79,9 +84,76 @@ class NonClosingSession:
     async def __aexit__(self, *exc) -> bool:
         return False
 
+# --------------------------------------------------------------------------- #
+# Test-database isolation
+# --------------------------------------------------------------------------- #
+# The suite MUST NOT run against the live application DB: DB-scanning "sweep"
+# tests would see real demo rows, and shared fixtures (fixed phone numbers, etc.)
+# would collide with committed data. So conftest owns a dedicated test database,
+# derived from the configured URL by suffixing the db name with `_test` (override
+# with env TEST_DATABASE_URL). It is created if missing and migrated to head once
+# per session — so a plain `pytest` just works, no manual DB setup needed.
+
+
+def _resolve_test_database_url() -> str:
+    explicit = os.getenv("TEST_DATABASE_URL")
+    if explicit:
+        return explicit
+    url = make_url(settings.database_url)
+    name = url.database or "izysafe"
+    if not name.endswith("_test"):
+        name = f"{name}_test"
+    return url.set(database=name).render_as_string(hide_password=False)
+
+
+TEST_DATABASE_URL = _resolve_test_database_url()
+
+# Hard guard: never let a misconfigured env point the suite at a non-test DB.
+_test_db_name = make_url(TEST_DATABASE_URL).database or ""
+if not _test_db_name.endswith("_test"):
+    raise RuntimeError(
+        f"Refusing to run tests against non-test database '{_test_db_name}'. "
+        "Point TEST_DATABASE_URL at a database whose name ends with '_test'."
+    )
+
+
+def _ensure_test_database() -> None:
+    """Create the test DB if absent, then migrate it to head (both idempotent)."""
+    import psycopg2
+
+    url = make_url(TEST_DATABASE_URL)
+    conn = psycopg2.connect(
+        host=url.host,
+        port=url.port or 5432,
+        user=url.username,
+        password=url.password,
+        dbname="postgres",  # maintenance DB — CREATE DATABASE can't run in the target
+    )
+    try:
+        conn.autocommit = True  # CREATE DATABASE cannot run inside a transaction block
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (url.database,))
+            if cur.fetchone() is None:
+                cur.execute(f'CREATE DATABASE "{url.database}"')
+    finally:
+        conn.close()
+
+    # Run the real migration chain (0001 = schema.sql, later ones ALTER on top) so
+    # the test schema always matches production. Alembic's env.py reads the URL from
+    # settings, which a fresh subprocess re-reads from the DATABASE_URL override.
+    subprocess.run(
+        ["alembic", "upgrade", "head"],
+        cwd=Path(__file__).resolve().parents[1],  # backend root (holds alembic.ini)
+        env={**os.environ, "DATABASE_URL": TEST_DATABASE_URL},
+        check=True,
+    )
+
+
+_ensure_test_database()
+
 # NullPool: never reuse an asyncpg connection across pytest-asyncio's
 # function-scoped event loops (each test gets a fresh connection on its own loop).
-_engine = create_async_engine(settings.database_url, poolclass=NullPool)
+_engine = create_async_engine(TEST_DATABASE_URL, poolclass=NullPool)
 
 
 # --------------------------------------------------------------------------- #

@@ -7,6 +7,7 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { AttendancePage } from "@/pages/AttendancePage";
 import { ReportsPage } from "@/pages/ReportsPage";
 import { RosterPage } from "@/pages/RosterPage";
+import { ParentsPage } from "@/pages/ParentsPage";
 import { DriversPage } from "@/pages/DriversPage";
 import { AuditPage } from "@/pages/AuditPage";
 import { MenusPage } from "@/pages/MenusPage";
@@ -34,6 +35,7 @@ export const router = createBrowserRouter([
           { path: "attendance", element: <AttendancePage /> },
           { path: "reports", element: <ReportsPage /> },
           { path: "roster", element: <RosterPage /> },
+          { path: "parents", element: <ParentsPage /> },
           { path: "routes", element: <RoutesPage /> },
           { path: "drivers", element: <DriversPage /> },
           { path: "audit", element: <AuditPage /> },

@@ -7,6 +7,7 @@ import '../../core/i18n.dart';
 import '../../core/theme.dart';
 import '../auth/auth_controller.dart';
 import '../children/children_providers.dart';
+import '../enrollments/providers.dart';
 import 'models.dart';
 import 'providers.dart';
 
@@ -40,6 +41,9 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: 16),
             _SectionLabel(t.t('settings.family', 'Family & children')),
             const _FamilyCard(),
+            const SizedBox(height: 16),
+            _SectionLabel(t.t('enroll.title', 'School requests')),
+            const _SchoolRequestsCard(),
             const SizedBox(height: 16),
             _SectionLabel(t.t('settings.notifications', 'Notifications')),
             _NotificationsCard(profile: p),
@@ -148,55 +152,13 @@ class _ProfileCard extends ConsumerWidget {
               ),
             ),
             OutlinedButton(
-              onPressed: () => _editProfile(context, ref, profile),
+              onPressed: () => context.push('/profile'),
               child: Text(t.t('common.edit', 'Edit')),
             ),
           ],
         ),
       ),
     );
-  }
-
-  Future<void> _editProfile(
-      BuildContext context, WidgetRef ref, ProfileSettings p) async {
-    final t = ref.read(translatorProvider);
-    final nameCtl = TextEditingController(text: p.name ?? '');
-    final emailCtl = TextEditingController(text: p.email ?? '');
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(t.t('settings.edit_profile', 'Edit profile')),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-                controller: nameCtl,
-                decoration: InputDecoration(
-                    labelText: t.t('settings.name', 'Name'))),
-            const SizedBox(height: 12),
-            TextField(
-                controller: emailCtl,
-                keyboardType: TextInputType.emailAddress,
-                decoration: InputDecoration(
-                    labelText: t.t('settings.email', 'Email'))),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(t.t('common.cancel', 'Cancel'))),
-          FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: Text(t.t('common.save', 'Save'))),
-        ],
-      ),
-    );
-    if (saved == true) {
-      await ref.read(settingsActionsProvider).updateProfile(
-            name: nameCtl.text.trim().isEmpty ? null : nameCtl.text.trim(),
-            email: emailCtl.text.trim().isEmpty ? null : emailCtl.text.trim(),
-          );
-    }
   }
 }
 
@@ -455,6 +417,52 @@ class _EmergencyCard extends ConsumerWidget {
 }
 
 // --------------------------------------------------------------------------- plan
+class _SchoolRequestsCard extends ConsumerWidget {
+  const _SchoolRequestsCard();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = ref.watch(translatorProvider);
+    final pending = ref.watch(pendingEnrollmentsCountProvider);
+    return _Panel(
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: Container(
+          height: 46,
+          width: 46,
+          decoration: BoxDecoration(
+            gradient: Brand.gradient,
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: const Icon(Icons.school, color: Colors.white),
+        ),
+        title: Text(t.t('enroll.title', 'School requests'),
+            style: const TextStyle(fontWeight: FontWeight.w700)),
+        subtitle: Text(
+          pending > 0
+              ? '$pending ${t.t('enroll.pending_count', 'pending approval')}'
+              : t.t('enroll.manage_hint', 'Manage school visibility & consent'),
+          style: TextStyle(fontSize: 12.5, color: Colors.grey.shade600),
+        ),
+        trailing: pending > 0
+            ? Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE11D48),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text('$pending',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12)),
+              )
+            : const Icon(Icons.chevron_right, color: Colors.grey),
+        onTap: () => context.push('/enrollments'),
+      ),
+    );
+  }
+}
+
 class _PlanCard extends ConsumerWidget {
   const _PlanCard();
   @override
@@ -504,11 +512,7 @@ class _PlanCard extends ConsumerWidget {
                   ),
                 ),
                 TextButton(
-                  onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                        content: Text(
-                            t.t('settings.coming_soon', 'Plan management is coming soon.'))),
-                  ),
+                  onPressed: () => context.push('/plan'),
                   child: Text(t.t('settings.manage_plan', 'Manage')),
                 ),
               ],

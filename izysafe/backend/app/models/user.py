@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Double,
     ForeignKey,
     Index,
     Integer,
@@ -15,8 +16,9 @@ from sqlalchemy import (
     Text,
     Time,
     func,
+    text,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, SoftDeleteMixin, TimestampMixin, UpdatedAtMixin, UUIDPkMixin
@@ -45,6 +47,13 @@ class User(Base, UUIDPkMixin, TimestampMixin, UpdatedAtMixin, SoftDeleteMixin):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     quiet_hours_from: Mapped[time | None] = mapped_column(Time)
     quiet_hours_to: Mapped[time | None] = mapped_column(Time)
+    # Parent contact profile (profile setup): home address + map pin + extra numbers
+    address: Mapped[str | None] = mapped_column(Text)
+    home_lat: Mapped[float | None] = mapped_column(Double)
+    home_lng: Mapped[float | None] = mapped_column(Double)
+    additional_contacts: Mapped[list] = mapped_column(
+        JSONB, nullable=False, server_default=text("'[]'::jsonb")
+    )
 
     # relationships
     family_links: Mapped[list["FamilyMember"]] = relationship(  # noqa: F821

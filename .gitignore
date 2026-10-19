@@ -34,3 +34,6 @@
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Dev tooling binaries (large; not source) — keep the helper script, ignore the exe
+tools/cloudflared.exe

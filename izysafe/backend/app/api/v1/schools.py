@@ -21,6 +21,7 @@ from app.api.deps import (
     get_current_school_admin,
     get_current_school_admin_auth,
     get_email_gateway,
+    get_traccar_gateway,
 )
 from app.core.database import get_db
 from app.core.errors import success
@@ -39,6 +40,7 @@ from app.schemas.school import (
     EnrollStudentRequest,
     ForgotPasswordRequest,
     ManualAttendanceRequest,
+    ParentUpdateRequest,
     PasswordChangeRequest,
     ResetPasswordRequest,
     SchoolAdminManageRequest,
@@ -70,8 +72,18 @@ from app.services.email_gateway import EmailGateway
 from app.services.enrollment_service import EnrollmentService
 from app.services.password_reset_service import PasswordResetService
 from app.services.school_service import SchoolAuthService, SchoolService
+from app.services.device_service import DeviceService
+from app.services.traccar_gateway import TraccarGateway
+from app.models.device import Device
+from app.schemas.device import DeviceCreate, DeviceResponse
 
 router = APIRouter(prefix="/schools", tags=["schools"])
+
+
+def _serialize_device(device: Device, online: bool) -> dict:
+    resp = DeviceResponse.model_validate(device)
+    resp.is_online = online  # live Redis-derived state overrides the cached column
+    return resp.model_dump(mode="json")
 
 
 def _require_admin(admin: SchoolAdmin) -> None:
@@ -408,6 +420,113 @@ async def enroll_student(
     """Enroll a student by the parent's phone → creates a pending-consent enrollment."""
     enrollment, child = await EnrollmentService(db).enroll(admin, payload.model_dump())
     return success(_enrollment(enrollment, child))
+
+
+# --------------------------------------------------------------------------- #
+# Student devices (school-provisioned trackers)                               #
+# An admin can equip a student enrolled at their school with a GPS device.    #
+# No per-child device tier limit here (the school provisions its own); IMEI   #
+# uniqueness + Traccar registration (graceful seam) still apply. Resolves to  #
+# the same child, so the parent sees it too and Flow A / live tracking work.  #
+# --------------------------------------------------------------------------- #
+@router.post("/students/{child_id}/devices", status_code=201)
+async def add_student_device(
+    child_id: uuid.UUID,
+    payload: DeviceCreate,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+    traccar: TraccarGateway = Depends(get_traccar_gateway),
+) -> dict:
+    """Pair a GPS tracker to a student enrolled at the admin's school."""
+    device, online = await DeviceService(db, redis, traccar).add_device_for_school(
+        admin.school_id, child_id, payload.model_dump(exclude_unset=True)
+    )
+    return success(_serialize_device(device, online))
+
+
+@router.get("/students/{child_id}/devices")
+async def list_student_devices(
+    child_id: uuid.UUID,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+    traccar: TraccarGateway = Depends(get_traccar_gateway),
+) -> dict:
+    """List the devices for a student enrolled at the admin's school."""
+    rows = await DeviceService(db, redis, traccar).list_devices_for_school(
+        admin.school_id, child_id
+    )
+    return success([_serialize_device(d, online) for d, online in rows])
+
+
+@router.delete("/students/devices/{device_id}", status_code=204)
+async def remove_student_device(
+    device_id: uuid.UUID,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+    traccar: TraccarGateway = Depends(get_traccar_gateway),
+) -> Response:
+    """Unpair a device from a student enrolled at the admin's school."""
+    await DeviceService(db, redis, traccar).delete_device_for_school(
+        admin.school_id, device_id
+    )
+    return Response(status_code=204)
+
+
+# --------------------------------------------------------------------------- #
+# Parents (Model 1 — school manages the parents of its enrolled students)      #
+# --------------------------------------------------------------------------- #
+def _parent(p: dict) -> dict:
+    return {
+        "id": str(p["id"]),
+        "name": p["name"],
+        "phone": p["phone"],
+        "last_login_at": p["last_login_at"].isoformat() if p["last_login_at"] else None,
+        "child_count": len(p["children"]),
+        "children": p["children"],
+    }
+
+
+@router.get("/parents")
+async def list_parents(
+    q: str | None = Query(None, max_length=100),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Parents of students enrolled at the admin's school (search by name/phone)."""
+    parents, total = await EnrollmentService(db).list_parents(
+        admin, q=q, limit=limit, offset=offset
+    )
+    return success([_parent(p) for p in parents],
+                   meta={"total": total, "limit": limit, "offset": offset})
+
+
+@router.put("/parents/{user_id}")
+async def update_parent(
+    user_id: uuid.UUID,
+    payload: ParentUpdateRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Update a parent's name (Model 1: school-provisioned detail)."""
+    parent = await EnrollmentService(db).update_parent(admin, user_id, payload.name)
+    return success({"id": str(parent.id), "name": parent.name, "phone": parent.phone})
+
+
+@router.delete("/parents/{user_id}", status_code=204)
+async def remove_parent(
+    user_id: uuid.UUID,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Remove a parent from this school (deletes their enrollments here → revokes app
+    access once they have no active enrollment anywhere). Account + history retained."""
+    await EnrollmentService(db).remove_parent(admin, user_id)
+    return Response(status_code=204)
 
 
 @router.get("/students")

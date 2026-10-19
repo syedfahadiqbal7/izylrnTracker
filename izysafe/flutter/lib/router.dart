@@ -10,9 +10,13 @@ import 'features/alerts/alerts_screen.dart';
 import 'features/chat/chat_screen.dart';
 import 'features/children/child.dart';
 import 'features/children/home_screen.dart';
+import 'features/consent/consent_wizard_screen.dart';
 import 'features/devices/devices_screen.dart';
+import 'features/enrollments/enrollments_screen.dart';
 import 'features/geofences/safe_zones_screen.dart';
 import 'features/share/share_links_screen.dart';
+import 'features/settings/plan_screen.dart';
+import 'features/settings/profile_edit_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/tracking/live_map_screen.dart';
 
@@ -33,7 +37,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
       final loggedIn = auth.status == AuthStatus.authenticated;
       if (loggedIn) {
-        if (loc == '/' || loc == '/login') return '/home';
+        // After OTP verify we're on /otp — send authenticated users straight to
+        // /home from the splash, login AND otp screens (no manual refresh needed).
+        if (loc == '/' || loc == '/login' || loc == '/otp') return '/home';
         return null;
       }
       // not logged in — allow /login and /otp
@@ -53,6 +59,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/home', builder: (_, _) => const HomeScreen()),
       GoRoute(path: '/alerts', builder: (_, _) => const AlertsScreen()),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsScreen()),
+      GoRoute(path: '/profile', builder: (_, _) => const ProfileEditScreen()),
+      GoRoute(path: '/plan', builder: (_, _) => const PlanScreen()),
+      GoRoute(path: '/enrollments', builder: (_, _) => const EnrollmentsScreen()),
+      GoRoute(
+        path: '/enrollments/:id/setup',
+        builder: (_, state) =>
+            ConsentWizardScreen(enrollmentId: state.pathParameters['id']!),
+      ),
       GoRoute(
         path: '/child/:id/map',
         builder: (_, state) => LiveMapScreen(
