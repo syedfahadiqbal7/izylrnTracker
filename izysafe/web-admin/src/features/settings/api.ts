@@ -123,3 +123,92 @@ export function useDeleteAdmin() {
     },
   });
 }
+
+// --------------------------------------------------- OTP delivery channel (app-wide)
+export type OtpChannel = "whatsapp" | "sms" | "email";
+
+export interface OtpChannels {
+  channels: OtpChannel[];
+}
+
+export function useOtpChannels() {
+  return useQuery({
+    queryKey: ["otp-channels"],
+    queryFn: () => apiGet<OtpChannels>("/schools/otp-channels"),
+  });
+}
+
+export function useUpdateOtpChannels() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (channels: OtpChannel[]) =>
+      apiPut<OtpChannels>("/schools/otp-channels", { channels }),
+    onSuccess: () => {
+      toast.success("OTP channels saved");
+      qc.invalidateQueries({ queryKey: ["otp-channels"] });
+    },
+  });
+}
+
+// ---------------------------------------------- OTP provider credentials (masked)
+export interface OtpProvidersMasked {
+  whatsapp: { auth_key_set: boolean; template: string; integrated_number: string };
+  sms: { auth_token_set: boolean; account_sid: string; from_number: string };
+  email: {
+    password_set: boolean;
+    host: string;
+    port: number;
+    user: string;
+    from_address: string;
+    use_tls: boolean;
+  };
+}
+
+export type WhatsAppProviderUpdate = Partial<{
+  auth_key: string;
+  template: string;
+  integrated_number: string;
+}>;
+export type SmsProviderUpdate = Partial<{
+  account_sid: string;
+  auth_token: string;
+  from_number: string;
+}>;
+export type EmailProviderUpdate = Partial<{
+  host: string;
+  port: number;
+  user: string;
+  password: string;
+  from_address: string;
+  use_tls: boolean;
+}>;
+
+export function useOtpProviders() {
+  return useQuery({
+    queryKey: ["otp-providers"],
+    queryFn: () => apiGet<OtpProvidersMasked>("/schools/otp-providers"),
+  });
+}
+
+export type ProviderUpdate = WhatsAppProviderUpdate &
+  SmsProviderUpdate &
+  EmailProviderUpdate;
+
+export function useUpdateOtpProvider(channel: OtpChannel) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ProviderUpdate) =>
+      apiPut<OtpProvidersMasked>(`/schools/otp-providers/${channel}`, body),
+    onSuccess: () => {
+      toast.success("Credentials saved");
+      qc.invalidateQueries({ queryKey: ["otp-providers"] });
+    },
+  });
+}
+
+export function useTestOtpChannel(channel: OtpChannel) {
+  return useMutation({
+    mutationFn: (recipient: string) =>
+      apiPost<{ sent: boolean }>(`/schools/otp-providers/${channel}/test`, { recipient }),
+  });
+}

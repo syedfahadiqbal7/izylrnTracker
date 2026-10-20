@@ -49,6 +49,7 @@ import {
 import { ApiClientError } from "@/types/api";
 import { useT } from "@/lib/i18n/I18nProvider";
 import { LocalizationCard } from "@/features/localization/LocalizationCard";
+import { OtpChannelCard } from "@/features/settings/OtpChannelCard";
 import { useSchool, type School } from "@/features/school/api";
 import {
   useAdmins,
@@ -96,6 +97,7 @@ export function SettingsPage() {
           <AttendanceConfigCard school={school.data} canEdit={isAdmin} />
           <MyAccountCard />
           <AdminsCard isAdmin={isAdmin} meId={admin?.id} />
+          {isAdmin && <OtpChannelCard />}
           {isAdmin && <LocalizationCard />}
         </div>
       ) : (
