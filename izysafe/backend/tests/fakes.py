@@ -14,20 +14,24 @@ class FakeGateway:
         self.whatsapp_calls: list[tuple[str, str]] = []
         self.sms_calls: list[tuple[str, str]] = []
         self.email_calls: list[tuple[str, str]] = []  # (email, otp)
+        self.cfgs: list[tuple[str, dict | None]] = []  # (channel, resolved cfg)
         self.last_otp: str | None = None
 
-    async def send_whatsapp(self, phone: str, otp: str) -> bool:
+    async def send_whatsapp(self, phone: str, otp: str, cfg: dict | None = None) -> bool:
         self.whatsapp_calls.append((phone, otp))
+        self.cfgs.append(("whatsapp", cfg))
         self.last_otp = otp
         return self.whatsapp_ok
 
-    async def send_sms(self, phone: str, otp: str) -> bool:
+    async def send_sms(self, phone: str, otp: str, cfg: dict | None = None) -> bool:
         self.sms_calls.append((phone, otp))
+        self.cfgs.append(("sms", cfg))
         self.last_otp = otp
         return self.sms_ok
 
-    async def send_email(self, email: str, otp: str) -> bool:
+    async def send_email(self, email: str, otp: str, cfg: dict | None = None) -> bool:
         self.email_calls.append((email, otp))
+        self.cfgs.append(("email", cfg))
         self.last_otp = otp
         return self.email_ok
 
@@ -111,10 +115,17 @@ class FakeEmailGateway:
 
     def __init__(self, ok: bool = True) -> None:
         self.ok = ok
-        self.calls: list[dict] = []  # {to, subject, text, html}
+        self.calls: list[dict] = []  # {to, subject, text, html, smtp}
 
-    async def send(self, to: str, subject: str, text: str, html: str | None = None) -> bool:
-        self.calls.append({"to": to, "subject": subject, "text": text, "html": html})
+    async def send(
+        self,
+        to: str,
+        subject: str,
+        text: str,
+        html: str | None = None,
+        smtp: dict | None = None,
+    ) -> bool:
+        self.calls.append({"to": to, "subject": subject, "text": text, "html": html, "smtp": smtp})
         return self.ok
 
 

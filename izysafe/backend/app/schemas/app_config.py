@@ -35,3 +35,44 @@ class OtpChannelsUpdateRequest(BaseModel):
         if len(set(v)) != len(v):
             raise ValueError("duplicate channels")
         return v
+
+
+# --------------------------------------------------------------------------- #
+# Per-channel provider credentials (admin-managed, migration 0026 app_config)
+# --------------------------------------------------------------------------- #
+# Update semantics: every field is Optional and merged with `exclude_unset=True`,
+# so the admin panel sends only the fields it wants to change. A secret field that
+# is left blank is simply omitted → the stored value is kept (never overwritten
+# with an empty string). Secrets are masked on read (see AppConfigService), so the
+# GET responses below never echo a raw key back to the panel.
+class WhatsAppProviderUpdate(BaseModel):
+    """MSG91 WhatsApp credentials. `auth_key` is the secret."""
+
+    auth_key: str | None = Field(None, max_length=255)
+    template: str | None = Field(None, max_length=120)
+    integrated_number: str | None = Field(None, max_length=20)
+
+
+class SmsProviderUpdate(BaseModel):
+    """Twilio SMS credentials. `auth_token` is the secret."""
+
+    account_sid: str | None = Field(None, max_length=255)
+    auth_token: str | None = Field(None, max_length=255)
+    from_number: str | None = Field(None, max_length=20)
+
+
+class EmailProviderUpdate(BaseModel):
+    """SMTP email credentials. `password` is the secret."""
+
+    host: str | None = Field(None, max_length=255)
+    port: int | None = Field(None, ge=1, le=65535)
+    user: str | None = Field(None, max_length=255)
+    password: str | None = Field(None, max_length=255)
+    from_address: str | None = Field(None, max_length=255)
+    use_tls: bool | None = None
+
+
+class OtpTestRequest(BaseModel):
+    """Send a one-off test OTP through a single channel to verify its credentials."""
+
+    recipient: str = Field(..., min_length=3, max_length=255)

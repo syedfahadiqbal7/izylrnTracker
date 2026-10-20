@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import csv
 import io
+import secrets
 import uuid
 from datetime import date, datetime
 
@@ -21,10 +22,13 @@ from app.api.deps import (
     get_current_school_admin,
     get_current_school_admin_auth,
     get_email_gateway,
+    get_otp_gateway,
     get_traccar_gateway,
 )
 from app.core.database import get_db
 from app.core.errors import success
+from app.core.validators import validate_phone
+from app.services.otp_gateway import OtpGateway
 from app.core.redis import get_redis
 from app.models.child import Child
 from app.models.school import School, SchoolAdmin, StudentEnrollment
@@ -63,7 +67,14 @@ from app.schemas.i18n import (
     TranslationResponse,
     TranslationUpsertRequest,
 )
-from app.schemas.app_config import OtpChannelsResponse, OtpChannelsUpdateRequest
+from app.schemas.app_config import (
+    EmailProviderUpdate,
+    OtpChannelsResponse,
+    OtpChannelsUpdateRequest,
+    OtpTestRequest,
+    SmsProviderUpdate,
+    WhatsAppProviderUpdate,
+)
 from app.services.app_config_service import AppConfigService
 from app.services.attendance_service import AttendanceService
 from app.services.audit_service import AuditService
@@ -824,3 +835,84 @@ async def update_otp_channels(
     _require_admin(admin)
     channels = await AppConfigService(db).set_otp_channels(payload.channels)
     return success(OtpChannelsResponse(channels=channels).model_dump())
+
+
+# --------------------------------------------------------------------------- #
+# OTP provider credentials (migration 0026) — app-wide config, role='admin'
+# Secrets are masked on read; a blank secret on write keeps the stored value.
+# --------------------------------------------------------------------------- #
+@router.get("/otp-providers")
+async def get_otp_providers(
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Per-channel provider credentials (secrets masked as `<field>_set` booleans)."""
+    _require_admin(admin)
+    return success(await AppConfigService(db).get_otp_providers_masked())
+
+
+@router.put("/otp-providers/whatsapp")
+async def update_whatsapp_provider(
+    payload: WhatsAppProviderUpdate,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Store/update MSG91 WhatsApp credentials (omit auth_key to keep the current one)."""
+    _require_admin(admin)
+    masked = await AppConfigService(db).set_otp_provider(
+        "whatsapp", payload.model_dump(exclude_unset=True)
+    )
+    return success(masked)
+
+
+@router.put("/otp-providers/sms")
+async def update_sms_provider(
+    payload: SmsProviderUpdate,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Store/update Twilio SMS credentials (omit auth_token to keep the current one)."""
+    _require_admin(admin)
+    masked = await AppConfigService(db).set_otp_provider(
+        "sms", payload.model_dump(exclude_unset=True)
+    )
+    return success(masked)
+
+
+@router.put("/otp-providers/email")
+async def update_email_provider(
+    payload: EmailProviderUpdate,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Store/update SMTP email credentials (omit password to keep the current one)."""
+    _require_admin(admin)
+    masked = await AppConfigService(db).set_otp_provider(
+        "email", payload.model_dump(exclude_unset=True)
+    )
+    return success(masked)
+
+
+@router.post("/otp-providers/{channel}/test")
+async def test_otp_provider(
+    channel: str,
+    payload: OtpTestRequest,
+    admin: SchoolAdmin = Depends(get_current_school_admin),
+    db: AsyncSession = Depends(get_db),
+    gateway: OtpGateway = Depends(get_otp_gateway),
+) -> dict:
+    """Send a one-off test code through a single channel using the current creds.
+    Returns {sent} — true iff the provider accepted it. The code is never stored or
+    logged (it starts no login session)."""
+    _require_admin(admin)
+    if channel not in ("whatsapp", "sms", "email"):
+        raise APIException(404, "UNKNOWN_CHANNEL", "Unknown OTP channel")
+    cfg = (await AppConfigService(db).resolve_otp_providers())[channel]
+    code = f"{secrets.randbelow(1_000_000):06d}"
+    if channel == "whatsapp":
+        sent = await gateway.send_whatsapp(validate_phone(payload.recipient), code, cfg)
+    elif channel == "sms":
+        sent = await gateway.send_sms(validate_phone(payload.recipient), code, cfg)
+    else:
+        sent = await gateway.send_email(payload.recipient, code, cfg)
+    return success({"sent": sent})

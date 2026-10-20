@@ -190,17 +190,19 @@ class OtpService:
         historic WhatsApp -> SMS fallback. Email is skipped for a user with no email
         on file (parents authenticate by phone; email is optional profile data), so
         delivery falls through to the next enabled channel."""
-        channels = await AppConfigService(self.db).get_otp_channels()
+        config = AppConfigService(self.db)
+        channels = await config.get_otp_channels()
+        providers = await config.resolve_otp_providers()  # creds: panel over env
         for channel in channels:
             if channel == "whatsapp":
-                if await self.gateway.send_whatsapp(phone, otp):
+                if await self.gateway.send_whatsapp(phone, otp, providers["whatsapp"]):
                     return "whatsapp"
             elif channel == "sms":
-                if await self.gateway.send_sms(phone, otp):
+                if await self.gateway.send_sms(phone, otp, providers["sms"]):
                     return "sms"
             elif channel == "email":
                 email = await self._email_for(phone)
-                if email and await self.gateway.send_email(email, otp):
+                if email and await self.gateway.send_email(email, otp, providers["email"]):
                     return "email"
                 # No email on file (or send failed) ⇒ fall through to next channel.
         # Dev fallback: nothing delivered (no provider configured / all failed). Log
